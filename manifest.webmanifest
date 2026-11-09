@@ -1,0 +1,16 @@
+{
+  "name": "osu!mania Receptor Fixer",
+  "short_name": "Receptor Fixer",
+  "description": "Restore, make and convert osu!mania receptor PNGs for any ColumnWidth and HitPosition, at 1x and @2x.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#e4e4e4",
+  "theme_color": "#d4d4d4",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}

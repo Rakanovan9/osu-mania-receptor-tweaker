@@ -1,0 +1,10 @@
+# Build output and leftovers from desktop\build.bat
+.venv/
+build/
+dist/
+__pycache__/
+*.spec
+
+# Local only
+.claude/
+Test Images/

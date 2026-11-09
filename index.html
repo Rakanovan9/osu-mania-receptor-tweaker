@@ -1,0 +1,2519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>osu!mania Receptor Fixer</title>
+    <meta name="description" content="Restore, make and convert osu!mania receptor (KeyImage) PNGs for any ColumnWidth and HitPosition, at 1x and @2x.">
+    <meta name="theme-color" content="#d4d4d4">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <script src="vendor/jszip.min.js" defer></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body { margin: 0; }
+        body {
+            font: 13px/1.45 "Segoe UI", Tahoma, Verdana, Arial, sans-serif;
+            background: #e4e4e4;
+            color: #222;
+        }
+        code, .mono, input[type="number"] {
+            font-family: Consolas, "Courier New", monospace;
+        }
+        .link {
+            color: #1a4f9c;
+            text-decoration: underline;
+            background: none;
+            border: 0;
+            padding: 0;
+            font: inherit;
+            cursor: pointer;
+        }
+        h1 { font-size: 16px; margin: 0; }
+        p { margin: 4px 0; }
+        .hidden { display: none !important; }
+
+        /* Header & tabs */
+        .topbar { background: #d4d4d4; border-bottom: 1px solid #a8a8a8; }
+        .topbar-inner { max-width: 1100px; margin: 0 auto; padding: 8px 12px 0; }
+        .subtitle { color: #555; font-size: 12px; margin: 1px 0 8px; }
+        .tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+        .tab {
+            font: inherit;
+            padding: 4px 14px;
+            border: 1px solid #a8a8a8;
+            border-bottom: 0;
+            background: #c8c8c8;
+            color: #333;
+            cursor: pointer;
+            margin-bottom: -1px;
+        }
+        .tab.active { background: #e4e4e4; font-weight: bold; color: #000; padding-bottom: 5px; }
+
+        /* Layout */
+        .page {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 12px;
+            display: grid;
+            grid-template-columns: 300px minmax(0, 1fr);
+            gap: 12px;
+            align-items: start;
+        }
+        .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+        @media (max-width: 800px) {
+            .page { grid-template-columns: minmax(0, 1fr); }
+        }
+
+        fieldset {
+            margin: 0;
+            border: 1px solid #a8a8a8;
+            background: #f4f4f4;
+            padding: 6px 10px 10px;
+            min-width: 0;
+        }
+        legend { font-weight: bold; padding: 0 4px; }
+        .hint { color: #666; font-size: 12px; }
+        .sub { font-weight: bold; margin: 6px 0 2px; }
+
+        .field {
+            display: grid;
+            grid-template-columns: 1fr auto 70px;
+            align-items: center;
+            column-gap: 6px;
+            margin: 4px 0;
+        }
+        .field .unit { color: #555; font-size: 12px; white-space: nowrap; }
+        input[type="text"] {
+            font: 13px Consolas, "Courier New", monospace;
+            padding: 1px 4px;
+            border: 1px solid #8f8f8f;
+            background: #fff;
+            min-width: 0;
+        }
+        input.fname { width: 100%; }
+        .fname-cell { display: flex; align-items: center; gap: 2px; }
+        .fname-cell .ext { color: #666; white-space: nowrap; }
+        input[type="number"] {
+            width: 72px;
+            font-size: 13px;
+            padding: 1px 3px;
+            border: 1px solid #8f8f8f;
+            background: #fff;
+            text-align: right;
+        }
+
+        details.adv { border: 1px solid #a8a8a8; background: #f4f4f4; padding: 4px 10px; }
+        details.adv summary { cursor: pointer; font-weight: bold; padding: 2px 0; }
+        details.adv[open] summary { margin-bottom: 4px; }
+        .opt-group { margin: 6px 0 8px; }
+
+        .btn {
+            font: inherit;
+            padding: 3px 10px;
+            border: 1px solid #8a8a8a;
+            border-radius: 2px;
+            background: linear-gradient(#fbfbfb, #dedede);
+            color: #111;
+            cursor: pointer;
+        }
+        .btn:hover { background: linear-gradient(#ffffff, #e8e8e8); }
+        .btn:active { background: #c9d6e6; border-color: #5a7aa5; }
+        .btn:disabled { color: #999; cursor: default; background: #eee; }
+        .btn-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+        select { font: inherit; }
+
+        .choice { display: flex; gap: 6px; align-items: flex-start; margin: 2px 0; cursor: pointer; }
+        .choice input { margin-top: 2px; }
+
+        .msg { border: 1px solid; padding: 6px 8px; }
+        .msg.ok   { background: #eef5e6; border-color: #9cbf79; }
+        .msg.warn { background: #fdf6d8; border-color: #cfae4a; }
+        .msg.err  { background: #f9e6e6; border-color: #c97b7b; }
+        .msg.info { background: #e9f0f8; border-color: #8eabcf; }
+        .msg .btn { margin-top: 5px; }
+
+        table.data { border-collapse: collapse; width: 100%; background: #fff; }
+        table.data th, table.data td { border: 1px solid #bdbdbd; padding: 3px 6px; text-align: left; }
+        table.data th { background: #e2e2e2; }
+        #skinBody table.data td { word-break: break-all; font-size: 11px; }
+        table.data td.r { text-align: right; width: 1%; white-space: nowrap; }
+
+        .viewport { position: relative; background: #2b2b2b; border: 1px solid #777; padding: 6px; height: 360px; overflow: hidden; }
+        .panel-cap { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 3px; }
+        .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        @media (max-width: 600px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+        .swatch { display: inline-block; width: 10px; height: 10px; border: 1px solid #555; margin: 0 3px 0 8px; vertical-align: -1px; }
+        .swatch:first-child { margin-left: 0; }
+
+        .dropzone { border: 2px dashed #9a9a9a; background: #fff; padding: 14px 8px; text-align: center; cursor: pointer; }
+        .dropzone:focus { outline: 1px dotted #000; }
+        .dropzone.active { border-color: #3a6fb0; background: #e9f0f8; }
+
+        #toast {
+            position: fixed; right: 12px; bottom: 12px;
+            background: #ffffe1; border: 1px solid #888; padding: 5px 10px; font-size: 12px;
+            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.25);
+            opacity: 0; pointer-events: none; transition: opacity 0.2s; z-index: 50;
+        }
+        #toast.show { opacity: 1; }
+        footer { text-align: center; color: #666; font-size: 11px; padding: 4px 12px 14px; }
+    </style>
+</head>
+<body>
+
+    <div class="topbar">
+        <div class="topbar-inner">
+            <h1>osu!mania Receptor Fixer</h1>
+            <div class="subtitle">Fix receptor (KeyImage) PNGs for any ColumnWidth and HitPosition, at 1x and @2x.</div>
+            <div class="tabs">
+                <button class="tab" id="tab-restore" onclick="setMode('restore')">Restore</button>
+                <button class="tab" id="tab-make" onclick="setMode('make')">Make</button>
+                <button class="tab" id="tab-convert" onclick="setMode('convert')">Convert</button>
+            </div>
+        </div>
+    </div>
+
+    <main class="page">
+        <section class="col">
+            <div class="msg info" id="modeDesc"></div>
+
+            <fieldset id="skinBox">
+                <legend>Skin folder <span class="hint">(optional)</span></legend>
+                <div class="btn-row">
+                    <button class="btn" onclick="openSkin()">Open skin folder…</button>
+                    <span id="skinName" class="mono"></span>
+                    <span id="skinKeysWrap" class="hidden"><label for="selSkinKeys">Key mode</label> <select id="selSkinKeys"></select></span>
+                </div>
+                <div id="skinBody"></div>
+            </fieldset>
+
+            <fieldset>
+                <legend>1. Image</legend>
+                <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Open image"
+                     onclick="$('fileInput').click()"
+                     onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); $('fileInput').click(); }">
+                    Drop a PNG here, click to browse,<br>or paste with Ctrl+V.
+                    <div class="hint">Several at once: the first is worked on, the rest help estimate skin.ini values.</div>
+                </div>
+                <input type="file" id="fileInput" accept="image/png,image/webp,image/jpeg" multiple class="hidden" onchange="onFileInput(event)">
+                <p id="fileStatus" class="hint">No image loaded.</p>
+                <button id="btnRemove" class="link hidden" onclick="removeImage()">Remove image</button>
+            </fieldset>
+
+            <fieldset>
+                <legend>2. skin.ini values</legend>
+                <div class="sub" id="oldLabel">skin.ini of the PNG</div>
+                <div class="field">
+                    <label for="inCW">ColumnWidth</label>
+                    <input type="number" id="inCW" min="1" max="400" step="any" placeholder="skin.ini">
+                    <span class="unit" id="hintCW"></span>
+                </div>
+                <div class="field">
+                    <label for="inHP">HitPosition</label>
+                    <input type="number" id="inHP" min="0" max="480" step="any" placeholder="skin.ini">
+                    <span class="unit" id="hintHP"></span>
+                </div>
+                <div class="field" id="sourceRow">
+                    <label for="selSource" title="Which ColumnWidth / HitPosition the images were made for">Use</label>
+                    <select id="selSource" style="grid-column: 2 / -1">
+                        <option value="auto">Auto: skin.ini unless it doesn't fit the art</option>
+                        <option value="ini">Always these skin.ini values</option>
+                        <option value="image">Always the estimate</option>
+                    </select>
+                </div>
+                <div id="guessBox" class="msg info hidden" style="margin-top:6px"></div>
+                <input type="file" id="setInput" accept="image/png,image/webp" multiple class="hidden" onchange="onSetInput(event)">
+                <div id="newGroup">
+                    <div class="sub">New skin.ini</div>
+                    <div class="field">
+                        <label for="inNCW">ColumnWidth</label>
+                        <input type="number" id="inNCW" min="1" max="400" step="any">
+                        <span class="unit" id="hintNCW"></span>
+                    </div>
+                    <div class="field">
+                        <label for="inNHP">HitPosition</label>
+                        <input type="number" id="inNHP" min="0" max="480" step="any">
+                        <span class="unit" id="hintNHP"></span>
+                    </div>
+                </div>
+                <div id="offsetGroup">
+                    <div class="field">
+                        <label for="inOff">Receptor offset</label>
+                        <input type="number" id="inOff" min="-300" max="300" step="1">
+                        <span class="unit">px, + = up</span>
+                    </div>
+                    <div class="hint">Moves the receptor above (+) or below (−) the HitPosition line. In 1x pixels; doubled for @2x.</div>
+                </div>
+            </fieldset>
+
+            <fieldset id="rotGroup">
+                <legend>Rotation (for arrows)</legend>
+                <div class="field">
+                    <label for="selSrcDir">Arrow in the image points</label>
+                    <select id="selSrcDir" style="grid-column: 2 / -1"><option value="left">Left</option><option value="up">Up</option><option value="down">Down</option><option value="right">Right</option></select>
+                </div>
+                <label class="choice"><input type="radio" name="rotMode" value="one">
+                    <span>One file, pointing
+                        <select id="selOneDir"><option value="same">as it is</option><option value="left">Left</option><option value="up">Up</option><option value="down">Down</option><option value="right">Right</option></select></span></label>
+                <label class="choice"><input type="radio" name="rotMode" value="set">
+                    <span>Set of <select id="selSetKeys" title="Number of keys"></select> keys, one file per key <span class="hint">(uses note-size width so all directions match)</span></span></label>
+                <label class="choice" id="fitOutlineRow"><input type="checkbox" id="chkFit">
+                    <span>Take proportions from the arrow's outline <span class="hint">(recommended: keeps pressed and unpressed sets identical even if the current ColumnWidth is a bit off)</span></span></label>
+                <div id="setDirsRow" class="btn-row" style="margin-left:22px">
+                    <span class="hint">Key 1 →</span>
+                    <span id="setDirs"></span>
+                </div>
+            </fieldset>
+
+            <details class="adv" id="advanced">
+                <summary>Advanced options</summary>
+
+                <div class="opt-group">
+                    <div class="sub">Input resolution</div>
+                    <label class="choice"><input type="radio" name="scale" value="auto"> Auto-detect</label>
+                    <label class="choice"><input type="radio" name="scale" value="1x"> 1x (×1.6)</label>
+                    <label class="choice"><input type="radio" name="scale" value="2x"> @2x (×3.2)</label>
+                    <div class="hint" id="detectText"></div>
+                </div>
+
+                <div class="opt-group" id="cropGroup">
+                    <div class="sub">Crop</div>
+                    <label class="choice"><input type="radio" name="crop" value="strict">
+                        <span>From skin.ini values <span class="hint">(default)</span></span></label>
+                    <label class="choice" id="keepRow" style="margin-left:22px"><input type="checkbox" id="chkKeep">
+                        <span>Keep artwork drawn past the box <span class="hint">(osu! draws it anyway, so nothing is cut off)</span></span></label>
+                    <label class="choice"><input type="radio" name="crop" value="center">
+                        <span>Centered on the artwork <span class="hint">(for sprites placed by eye)</span></span></label>
+                    <label class="choice"><input type="radio" name="crop" value="bottom">
+                        <span>Bottom on the lowest visible pixel</span></label>
+                    <label class="choice" id="cropTightLabel"><input type="radio" name="crop" value="tight">
+                        <span>Visible pixels only <span class="hint">(result is not square)</span></span></label>
+                </div>
+
+                <div class="opt-group">
+                    <div class="sub">Output width</div>
+                    <label class="choice"><input type="radio" name="width" value="image"> Same as the image</label>
+                    <label class="choice"><input type="radio" name="width" value="note"> Note size (ColumnWidth × 1.6 / 3.2)</label>
+                </div>
+            </details>
+        </section>
+
+        <section class="col">
+            <div id="notice" class="msg info"></div>
+
+            <fieldset>
+                <legend>Preview</legend>
+                <div class="grid2">
+                    <div>
+                        <div class="panel-cap"><b>Before</b><span class="mono" id="capBefore"></span></div>
+                        <div class="viewport"><canvas id="cvBefore"></canvas></div>
+                    </div>
+                    <div>
+                        <div class="panel-cap">
+                            <span><b>After</b>
+                                <select id="selPreview" title="Which output file to show"></select>
+                            </span>
+                            <span class="mono" id="capAfter"></span>
+                        </div>
+                        <div class="viewport"><canvas id="cvAfter"></canvas></div>
+                    </div>
+                </div>
+                <p class="hint" id="legend"></p>
+            </fieldset>
+
+            <fieldset id="gameBox">
+                <legend>In-game</legend>
+                <div class="viewport" style="height:160px"><canvas id="cvGame"></canvas></div>
+                <p class="hint">Drawn the way osu! shows a receptor: width stretched to ColumnWidth, height kept, bottom on the screen edge.
+                    <span class="swatch" style="background:#fbbf24"></span>a note at HitPosition (the receptor should line up with it)
+                    <span class="swatch" style="background:#38bdf8"></span>HitPosition line
+                    <span class="swatch" style="background:#f43f5e"></span>screen bottom</p>
+            </fieldset>
+
+            <fieldset>
+                <legend>3. Save</legend>
+                <div class="btn-row" style="margin-bottom:6px">
+                    <label for="selResize">Resizing</label>
+                    <select id="selResize">
+                        <option value="sharp">Sharp (Lanczos)</option>
+                        <option value="smooth">Smooth (browser)</option>
+                        <option value="nearest">Pixel art (nearest)</option>
+                    </select>
+                    <label for="selSharpen" style="margin-left:10px">Sharpen</label>
+                    <select id="selSharpen">
+                        <option value="0">Off</option>
+                        <option value="0.4">Light</option>
+                        <option value="0.8">Strong</option>
+                    </select>
+                </div>
+                <div class="field" style="grid-template-columns: auto minmax(0, 1fr) auto">
+                    <label for="inPattern">File names</label>
+                    <input type="text" id="inPattern" placeholder="automatic" spellcheck="false">
+                    <button class="link" onclick="resetNames()">Reset</button>
+                </div>
+                <div class="hint" style="margin-bottom:6px">
+                    Pattern for all files, e.g. <code>mania-key{key}</code>. You can use
+                    <code>{name}</code> (loaded file), <code>{key}</code> (1–4), <code>{dir}</code>, <code>{cw}</code>, <code>{hp}</code>, <code>{offset}</code>.
+                    "@2x" and ".png" are added for you. Each name can also be edited in the table below.
+                </div>
+                <table class="data">
+                    <thead><tr><th>Resolution</th><th>Size</th><th>File name</th><th></th></tr></thead>
+                    <tbody id="outRows"></tbody>
+                </table>
+                <p><button class="btn" id="btnZip" onclick="saveAll()">Save all (ZIP)</button></p>
+            </fieldset>
+        </section>
+    </main>
+
+    <footer>Images are processed in your browser and are never uploaded.</footer>
+
+    <div id="toast"></div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const MONO = 'Consolas, "Courier New", monospace';
+        const M1X = 1.6;   // 768 / 480
+        const M2X = 3.2;   // 1536 / 480
+        const ALPHA_THRESHOLD = 5;
+        const DIR_ANGLE = { up: 0, right: 1, down: 2, left: 3 }; // clockwise quarter turns from up
+        const KEY_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        // Arrow directions for a new set: the usual left, up, down, right for 4 keys, repeated for others
+        const defaultDirs = n => [...Array(n)].map((_, i) => ['left', 'up', 'down', 'right'][i % 4]);
+
+        const MODES = {
+            restore: {
+                desc: 'Turn a receptor PNG from a skin (squished, with empty space below) back into a square image.',
+                oldLabel: 'skin.ini of this PNG',
+                skinInput: true
+            },
+            make: {
+                desc: 'Turn a square receptor image into a skin PNG for your ColumnWidth and HitPosition.',
+                oldLabel: 'Target skin.ini',
+                skinInput: false
+            },
+            convert: {
+                desc: 'Move an existing skin PNG to new skin.ini values, for example HitPosition 467 → 432.',
+                oldLabel: 'Current skin.ini of this PNG',
+                skinInput: true
+            }
+        };
+
+        // Each tool keeps its own image and settings, so switching tabs never loses work
+        const S = {
+            mode: 'restore',
+            resize: 'sharp',   // 'sharp' (Lanczos) | 'smooth' (browser bilinear) | 'nearest'
+            sharpen: 0,        // unsharp-mask amount applied after resizing
+            skin: null,        // the open skin folder (see "Skin folder"), shared by all tools
+            skinIni: true,     // also write ColumnWidth / HitPosition into skin.ini when saving into the skin
+            skinPressed: false, // Make: save as the pressed (KeyImageD) instead of unpressed receptors
+            skinCenter: false, // also center the playfield (ColumnStart) when saving into the skin
+            aspect: '16:9',    // screen ratio the playfield is centered for
+            data: {
+                // cw/hp: the user's skin.ini values (null until typed). source picks between them and the
+                // estimate; setImgs are other receptor images of the same skin, estimated together.
+                restore: { src: null, name: '', ab: null, fitOutline: true, pattern: '', names: {}, srcDir: 'up', rotMode: 'one', oneDir: 'same', setDirs: ['left', 'up', 'down', 'right'], cw: null, hp: null, source: 'auto', setImgs: [], guess: null, guessPick: null, scale: 'auto', crop: 'strict', width: 'image' },
+                make:    { src: null, name: '', ab: null, fitOutline: true, pattern: '', names: {}, srcDir: 'up', rotMode: 'one', oneDir: 'same', setDirs: ['left', 'up', 'down', 'right'], cw: 75, hp: 430, offset: 0, scale: 'auto', crop: 'strict', width: 'image' },
+                convert: { src: null, name: '', ab: null, fitOutline: true, pattern: '', names: {}, srcDir: 'up', rotMode: 'one', oneDir: 'same', setDirs: ['left', 'up', 'down', 'right'], cw: null, hp: null, source: 'auto', setImgs: [], guess: null, guessPick: null, keepOverflow: true, ncw: 70, nhp: 432, ncwTyped: false, offset: 0, scale: 'auto', crop: 'strict', width: 'image' }
+            }
+        };
+        const FALLBACK = { cw: 70, hp: 432 }; // only used when there are neither skin.ini values nor an estimate
+        const cur = () => S.data[S.mode];
+
+        function fmt(v, digits = 2) {
+            return Number.isInteger(v) ? String(v) : String(+v.toFixed(digits));
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        }
+
+        // =====================================================================
+        // Image analysis
+        // =====================================================================
+
+        // Bounding box of non-transparent pixels. top/left inclusive, bottom/right exclusive.
+        function scanAlphaBounds(canvas) {
+            const W = canvas.width;
+            const H = canvas.height;
+            const data = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+            let top = -1, last = -1, left = W, right = -1;
+            // Alpha-weighted moments: centroid and spread of the artwork, robust to stray edge pixels
+            let s = 0, sx = 0, sy = 0, sxx = 0, syy = 0;
+            for (let y = 0; y < H; y++) {
+                let rowHas = false;
+                const rowOff = y * W * 4;
+                for (let x = 0; x < W; x++) {
+                    const alpha = data[rowOff + x * 4 + 3];
+                    if (alpha === 0) continue;
+                    const a = alpha / 255;
+                    s += a; sx += a * x; sy += a * y; sxx += a * x * x; syy += a * y * y;
+                    if (alpha > ALPHA_THRESHOLD) {
+                        rowHas = true;
+                        if (x < left) left = x;
+                        if (x > right) right = x;
+                    }
+                }
+                if (rowHas) {
+                    if (top < 0) top = y;
+                    last = y;
+                }
+            }
+            if (top < 0) return null;
+            const cx = sx / s;
+            const cy = sy / s;
+            // Sub-pixel outline edges: where each side's strongest alpha crosses 50%, so antialiased
+            // edges are measured to a fraction of a pixel (used to fit rotated arrows precisely)
+            const colMax = new Float32Array(W), rowMax = new Float32Array(H);
+            for (let y = 0; y < H; y++) {
+                for (let x = 0; x < W; x++) {
+                    const al = data[(y * W + x) * 4 + 3];
+                    if (al > colMax[x]) colMax[x] = al;
+                    if (al > rowMax[y]) rowMax[y] = al;
+                }
+            }
+            const edge = (prof, from, step) => {
+                // Walk inward until the profile reaches half of its peak, then interpolate the crossing
+                let peak = 0;
+                for (let i = 0; i < prof.length; i++) peak = Math.max(peak, prof[i]);
+                const half = peak / 2;
+                let i = from;
+                while (i >= 0 && i < prof.length && prof[i] < half) i += step;
+                const prev = i - step;
+                const pv = prev >= 0 && prev < prof.length ? prof[prev] : 0;
+                const t = (half - pv) / Math.max(1e-6, prof[i] - pv); // 0..1 between pixel centers prev → i
+                return (step > 0 ? prev + 0.5 : prev + 0.5) + step * t;
+            };
+            return {
+                top, bottom: last + 1, left, right: right + 1, bottomGapPx: H - (last + 1),
+                fx0: edge(colMax, 0, 1), fx1: edge(colMax, W - 1, -1),
+                fy0: edge(rowMax, 0, 1), fy1: edge(rowMax, H - 1, -1),
+                cy: cy + 0.5, // pixel centers
+                spreadX: Math.sqrt(Math.max(1e-6, sxx / s - cx * cx)),
+                spreadY: Math.sqrt(Math.max(1e-6, syy / s - cy * cy))
+            };
+        }
+
+        // Receptor box per skin.ini, measured upward from the PNG's bottom edge.
+        function strictBox(H_png, cw, hp, M) {
+            const bottomPadPx = Math.round((480 - hp) * M);
+            const boxH = Math.max(1, Math.round(cw * M));
+            const end = H_png - bottomPadPx;
+            return { bottomPadPx, boxH, start: end - boxH, end };
+        }
+
+        const has2xName = name => /@2x\.[a-z0-9]+$/i.test(name || '');
+
+        // Picks 1x or @2x for a skin PNG: the "@2x" file name wins, otherwise whichever
+        // multiplier puts the receptor box around the visible artwork.
+        function detectSkinScale(name, H_png, cw, hp, ab) {
+            if (has2xName(name)) return { scale: M2X, text: 'Detected @2x from the file name.' };
+            if (!ab) return { scale: M1X, text: 'Image is empty; using 1x.' };
+            const artCenter = (ab.top + ab.bottom) / 2;
+            const [c1, c2] = [M1X, M2X].map(M => {
+                const box = strictBox(H_png, cw, hp, M);
+                let err = Math.abs(artCenter - (box.start + box.end) / 2);
+                err += Math.max(0, box.start - ab.top) + Math.max(0, ab.bottom - box.end);
+                if (box.start < 0) err += -box.start;
+                return { M, err };
+            });
+            const best = c1.err <= c2.err ? c1 : c2;
+            const sure = Math.abs(c1.err - c2.err) > 8 ? '' : ' (not certain: check the preview)';
+            return {
+                scale: best.M,
+                text: `Detected ${best.M === M2X ? '@2x' : '1x'} from where the artwork sits${sure}. Fit error: 1x ${c1.err.toFixed(1)} px, @2x ${c2.err.toFixed(1)} px.`
+            };
+        }
+
+        // Estimates ColumnWidth and HitPosition from a skin PNG. Assumes the receptor artwork is about
+        // as tall as it is wide before squishing (true for circles, bars, diamonds), is centered in
+        // its box, and that the PNG has no extra empty space above the box. Scores are in 1x pixels.
+        function guessSkinValues(d) {
+            const ab = d.ab;
+            if (!ab) return null;
+            const W = d.src.width;
+            const H = d.src.height;
+            const artH = ab.bottom - ab.top;
+            const estBox = W * ab.spreadY / ab.spreadX;
+            // osu! loads files without "@2x" as 1x, and a 1x file at one ColumnWidth/HitPosition has the
+            // same pixel layout as an @2x file at half the values, so the name decides when present.
+            // @2x is still considered for unnamed files, for renamed sprites that only fit at ×3.2.
+            const named2x = has2xName(d.name);
+            const scales = named2x ? [M2X] : [M1X, M2X];
+            const seen = new Set();
+            const cands = [];
+            for (const M of scales) {
+                for (let cw = 10; cw <= 130; cw++) {
+                    const box = Math.round(cw * M);
+                    if (box < artH) continue;
+                    const aspectErr = 0.5 * Math.abs(box - estBox) / M;
+                    const scalePenalty = !named2x && M === M2X ? 3 : 0;
+                    for (let hp = 240; hp <= 480; hp++) {
+                        const pad = Math.round((480 - hp) * M);
+                        const end = H - pad;
+                        const start = end - box;
+                        if (start < 0 || ab.top < start || ab.bottom > end) continue;
+                        const key = `${M}:${box}:${pad}`;
+                        if (seen.has(key)) continue;
+                        seen.add(key);
+                        const offCenter = 2 * Math.abs(ab.cy - (start + end) / 2) / M;
+                        const topPenalty = start === 0 ? 0 : 2 + 0.02 * start / M;
+                        cands.push({ M, cw, hp, score: aspectErr + offCenter + topPenalty + scalePenalty });
+                    }
+                }
+            }
+            if (!cands.length) return null;
+            cands.sort((a, b) => a.score - b.score);
+            return { best: cands[0], alts: cands.slice(1, 3), count: 1 };
+        }
+
+        // The loaded image plus any other receptor images of the same skin.
+        function setArts(d) {
+            return [{ name: d.name, W: d.src.width, H: d.src.height, ab: d.ab }, ...d.setImgs].filter(a => a.ab);
+        }
+
+        // One ColumnWidth / HitPosition for the whole receptor set: a skin has only one per key mode, so
+        // every image (pressed, unpressed, 1x, @2x) is scored over the same grid and the scores are added.
+        // Same terms as guessSkinValues; the resolution comes from each file's name.
+        const CW_MIN = 10, CW_N = 121, HP_MIN = 240, HP_N = 241;
+        function guessSetValues(d) {
+            const arts = setArts(d);
+            if (!arts.length) return null;
+            const total = new Float64Array(CW_N * HP_N);
+            for (const a of arts) {
+                const M = has2xName(a.name) ? M2X : M1X;
+                const artH = a.ab.bottom - a.ab.top;
+                const estBox = a.W * a.ab.spreadY / a.ab.spreadX;
+                for (let i = 0; i < CW_N; i++) {
+                    const box = Math.round((CW_MIN + i) * M);
+                    const aspectErr = 0.5 * Math.abs(box - estBox) / M;
+                    for (let j = 0; j < HP_N; j++) {
+                        const k = i * HP_N + j;
+                        const pad = Math.round((480 - (HP_MIN + j)) * M);
+                        const end = a.H - pad;
+                        const start = end - box;
+                        if (box < artH || start < 0 || a.ab.top < start || a.ab.bottom > end) {
+                            total[k] = Infinity;
+                            continue;
+                        }
+                        const offCenter = 2 * Math.abs(a.ab.cy - (start + end) / 2) / M;
+                        total[k] += aspectErr + offCenter + (start === 0 ? 0 : 2 + 0.02 * start / M);
+                    }
+                }
+            }
+            const M0 = has2xName(d.name) ? M2X : M1X;
+            const cands = [];
+            total.forEach((score, k) => {
+                if (Number.isFinite(score)) cands.push({ M: M0, cw: CW_MIN + Math.floor(k / HP_N), hp: HP_MIN + k % HP_N, score });
+            });
+            if (!cands.length) return null;
+            cands.sort((a, b) => a.score - b.score);
+            // Alternatives that differ in the loaded image's pixel layout
+            const seen = new Set();
+            const picks = cands.filter(c => {
+                const key = `${Math.round(c.cw * M0)}:${Math.round((480 - c.hp) * M0)}`;
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            }).slice(0, 3);
+            return { best: picks[0], alts: picks.slice(1), count: arts.length };
+        }
+
+        function estimate(d) {
+            d.guess = !d.ab ? null : d.setImgs.length ? guessSetValues(d) : guessSkinValues(d);
+            d.guessPick = null;
+        }
+
+        // Whether the typed skin.ini values put every image's artwork inside its box (1 px slack).
+        function iniFits(d) {
+            const fits = (a, M) => {
+                const b = strictBox(a.H, d.cw, d.hp, M);
+                return !(a.ab.top < b.start - 1 || a.ab.bottom > b.end + 1);
+            };
+            const M0 = d.scale === '1x' ? M1X : d.scale === '2x' ? M2X : detectSkinScale(d.name, d.src.height, d.cw, d.hp, d.ab).scale;
+            return (!d.ab || fits({ H: d.src.height, ab: d.ab }, M0))
+                && d.setImgs.every(a => !a.ab || fits(a, has2xName(a.name) ? M2X : M1X));
+        }
+
+        // The ColumnWidth / HitPosition the images are read with. skin.ini values are often wrong for the
+        // images (edited skins, receptors copied from another skin), so "auto" trusts them only when they fit.
+        function usedValues(d) {
+            const hasIni = d.cw != null && d.hp != null;
+            const pick = d.guess && (d.guessPick || d.guess.best);
+            const ini = { cw: d.cw, hp: d.hp, from: 'ini' };
+            const est = why => ({ cw: pick.cw, hp: pick.hp, M: pick.M, from: 'image', why });
+            if (!pick) return hasIni ? ini : { ...FALLBACK, from: 'default' };
+            if (!hasIni) return est('noIni');
+            if (d.source === 'ini') return ini;
+            if (d.source === 'image') return est('chosen');
+            return iniFits(d) ? ini : est('misfit');
+        }
+
+        function useGuess(i) {
+            const d = cur();
+            if (!d.guess) return;
+            d.guessPick = i < 0 ? null : d.guess.alts[i];
+            if (usedValues(d).from !== 'image') d.source = 'image';
+            syncInputs();
+            update();
+        }
+
+        // Width of an output tier, starting from the input image's width at its own resolution.
+        function tierWidth(W_in, inIs2x, tier) {
+            if (tier === '2x') return inIs2x ? W_in : W_in * 2;
+            return inIs2x ? Math.max(1, Math.round(W_in / 2)) : W_in;
+        }
+
+        // Everything needed to preview and export the current tool's result.
+        function compute(d = cur(), mode = S.mode) {
+            if (!d.src) return null;
+            const W = d.src.width;
+            const H = d.src.height;
+            const r = { mode, W, H, d };
+
+            if (MODES[mode].skinInput) {
+                const u = usedValues(d);
+                Object.assign(r, { used: u, cw: u.cw, hp: u.hp });
+                const det = detectSkinScale(d.name, H, u.cw, u.hp, d.ab);
+                r.detText = det.text;
+                let autoM = det.scale;
+                if (u.M && !has2xName(d.name)) {
+                    autoM = u.M; // the estimate already decided 1x vs @2x
+                    r.detText = `Read as ${u.M === M2X ? '@2x' : '1x'}, from the estimate.`;
+                }
+                r.M = d.scale === '1x' ? M1X : d.scale === '2x' ? M2X : autoM;
+                r.box = strictBox(H, u.cw, u.hp, r.M);
+
+                let crop = d.crop;
+                if (!d.ab) crop = 'strict';
+                if (mode === 'convert' && crop === 'tight') crop = 'strict';
+                let yStart = r.box.start;
+                let yEnd = r.box.end;
+                if (crop === 'bottom') {
+                    yEnd = d.ab.bottom;
+                    yStart = yEnd - r.box.boxH;
+                } else if (crop === 'center') {
+                    const shift = Math.round((d.ab.top + d.ab.bottom) / 2 - (r.box.start + r.box.end) / 2);
+                    yStart += shift;
+                    yEnd += shift;
+                } else if (crop === 'tight') {
+                    yStart = d.ab.top;
+                    yEnd = d.ab.bottom;
+                }
+                Object.assign(r, { crop, yStart, yEnd, cropH: Math.max(1, yEnd - yStart) });
+            } else {
+                r.M = d.scale === '2x' || (d.scale === 'auto' && has2xName(d.name)) ? M2X : M1X;
+                r.detText = d.scale !== 'auto' ? '' : has2xName(d.name)
+                    ? 'Detected @2x from the file name.'
+                    : 'No "@2x" in the file name, so the image is treated as 1x.';
+            }
+            r.is2x = r.M === M2X;
+
+            const base = (d.name || 'receptor').replace(/\.[^.]+$/, '').replace(/@2x$/i, '') || 'receptor';
+            const outCW = mode === 'convert' ? d.ncw : mode === 'restore' ? r.cw : d.cw;
+            const outHP = mode === 'convert' ? d.nhp : mode === 'restore' ? r.hp : d.hp;
+            r.outCW = outCW;
+            r.outHP = outHP;
+
+            // One output per column (4 for an arrow set) and per resolution
+            const columns = d.rotMode === 'set'
+                ? d.setDirs.map((dir, i) => ({ dir, tag: `_${i + 1}_${dir}` }))
+                : [{ dir: d.oneDir === 'same' ? d.srcDir : d.oneDir, tag: d.oneDir === 'same' || d.oneDir === d.srcDir ? '' : `_${d.oneDir}` }];
+            // Height of the region once un-squished back to the source width (square art → W)
+            // When turning arrows, take the proportions from the arrow's own outline instead of the
+            // current ColumnWidth, and turn around the arrow's center. A wrong ColumnWidth would leave
+            // the arrow slightly squashed; unturned keys keep that squash vertical and turned keys get
+            // it sideways, so e.g. a pressed set made from a left arrow would not match an unpressed set
+            // made from an up arrow.
+            const rotating = columns.length > 1 || columns.some(c => c.dir !== d.srcDir);
+            r.fitted = null;
+            r.shiftX = 0;
+            if (rotating && d.fitOutline && MODES[mode].skinInput && d.ab) {
+                const ab = d.ab;
+                const artW = ab.fx1 - ab.fx0;
+                const artH = ab.fy1 - ab.fy0;
+                const sh = W * artH / artW; // source rows that make a W-tall square around the arrow
+                r.yStart = (ab.fy0 + ab.fy1) / 2 - sh / 2;
+                r.cropH = sh;
+                r.yEnd = r.yStart + sh;
+                r.shiftX = W / 2 - (ab.fx0 + ab.fx1) / 2;
+                r.fitted = { artW: +artW.toFixed(1), artH: +artH.toFixed(1), impliedCW: (artH * W / artW) / r.M };
+            }
+            const baseH = r.fitted ? W : MODES[mode].skinInput ? Math.max(1, Math.round(r.cropH * W / r.box.boxH)) : H;
+
+            // Artwork drawn past its ColumnWidth box: osu! draws it anyway, so Convert keeps all of it,
+            // scaled about the box by the same factor, so the part inside the box lands exactly where
+            // the strict conversion puts it.
+            r.overflow = null;
+            if (mode === 'convert' && d.keepOverflow && r.crop === 'strict' && !r.fitted && !rotating && d.ab
+                && (d.ab.top < r.yStart || d.ab.bottom > r.yEnd)) {
+                r.overflow = {
+                    y0: Math.min(r.yStart, d.ab.top), y1: Math.max(r.yEnd, d.ab.bottom),
+                    above: Math.max(0, r.yStart - d.ab.top), below: Math.max(0, d.ab.bottom - r.yEnd)
+                };
+            }
+
+            r.outputs = [];
+            columns.forEach((col, ci) => ['1x', '2x'].forEach(tier => {
+                const MT = tier === '2x' ? M2X : M1X;
+                const w = d.width === 'note' ? Math.max(1, Math.round(outCW * MT)) : tierWidth(W, r.is2x, tier);
+                const suffix = tier === '2x' ? '@2x' : '';
+                const o = { tier, w, col: ci, dir: col.dir, native: (tier === '2x') === r.is2x };
+                o.turns = (DIR_ANGLE[col.dir] - DIR_ANGLE[d.srcDir] + 4) % 4;
+                o.viaBase = o.turns > 0 || columns.length > 1;
+                if (mode === 'restore') {
+                    o.h = r.fitted ? w : Math.max(1, Math.round(r.cropH * w / r.box.boxH));
+                    o.name = `${base}_restored${col.tag}${suffix}.png`;
+                    o.region = { sy: r.yStart, sh: r.cropH, dh: o.h, baseH, shiftX: r.shiftX };
+                } else {
+                    // Skin PNG: graphic is ColumnWidth × M tall (the game only scales width), spacer below it
+                    const boxT = Math.max(1, Math.round(outCW * MT));
+                    o.graphicH = mode === 'make' ? Math.max(1, Math.round(boxT * H / W)) : boxT;
+                    // Offset is in 1x pixels; @2x gets exactly double so both files match in-game
+                    const offT = Math.round(d.offset * MT / M1X);
+                    const rawPad = Math.round((480 - outHP) * MT) + offT;
+                    o.pad = Math.max(0, rawPad);
+                    o.offsetClamped = rawPad < 0;
+                    o.h = o.graphicH + o.pad;
+                    const offTag = d.offset > 0 ? `_up${fmt(d.offset)}` : d.offset < 0 ? `_down${fmt(-d.offset)}` : '';
+                    o.name = `${base}${col.tag}_CW${fmt(outCW)}_HP${fmt(outHP)}${offTag}${suffix}.png`;
+                    o.region = mode === 'make'
+                        ? { sy: 0, sh: H, dh: o.graphicH, baseH }
+                        : { sy: r.yStart, sh: r.cropH, dh: o.graphicH, baseH, shiftX: r.shiftX };
+                    if (r.overflow) {
+                        const k = o.graphicH / r.box.boxH;
+                        const ov = r.overflow;
+                        o.above = Math.round((r.yStart - ov.y0) * k);
+                        const below = Math.round((ov.y1 - r.yEnd) * k);
+                        // Art below the box uses up the empty space; whatever reaches past the screen bottom is cut
+                        o.cutBelow = Math.max(0, below - o.pad);
+                        o.h = o.above + o.graphicH + o.pad;
+                        o.region = { sy: ov.y0, sh: ov.y1 - ov.y0, dh: o.above + o.graphicH + below, baseH };
+                    }
+                }
+                o.key = `${ci}:${tier}`;
+                o.label = `${tier === '2x' ? '@2x' : '1x'}${columns.length > 1 ? ` · key ${ci + 1} (${col.dir})` : ''}`;
+                o.src = d.src;
+                r.outputs.push(o);
+            }));
+            applyNames(r, d, base, columns);
+            r.main = r.outputs.find(o => o.native && o.col === 0);
+            r.preview = r.outputs.find(o => o.key === d.preview) || r.main;
+            // In-game: the native-resolution file for each key (of the set, else of the open skin's key mode)
+            r.nKeys = columns.length > 1 ? columns.length : S.skin ? S.skin.keys : 4;
+            r.gameImgs = [...Array(r.nKeys)].map((_, k) => r.outputs.find(o => o.native && o.col === (columns.length > 1 ? k : 0)));
+            return r;
+        }
+
+        // Turns user text into a safe file name stem (no folder or Windows-reserved characters,
+        // no extension or "@2x", which are added per file).
+        function cleanStem(text) {
+            return String(text)
+                .replace(/\.png$/i, '')
+                .replace(/@2x$/i, '')
+                .replace(/[<>:"/\|?*\x00-\x1f]/g, '_')
+                .trim()
+                .replace(/[. ]+$/, '');
+        }
+
+        // Picks each output's file name: a name typed for that key, else the pattern, else the
+        // automatic name. Keys that would end up with the same name get "_<key>" appended.
+        function applyNames(r, d, base, columns) {
+            const tokens = (o) => ({
+                name: base,
+                key: String(o.col + 1),
+                dir: o.dir,
+                cw: fmt(r.outCW),
+                hp: fmt(r.outHP),
+                offset: fmt(d.offset || 0)
+            });
+            const stems = columns.map((col, ci) => {
+                const o = r.outputs.find(x => x.col === ci);
+                const custom = cleanStem(d.names[ci] || '');
+                if (custom) return custom;
+                if (d.pattern.trim()) {
+                    const t = tokens(o);
+                    const fromPattern = cleanStem(d.pattern.replace(/\{(\w+)\}/g, (m, k) => (k in t ? t[k] : m)));
+                    if (fromPattern) return fromPattern;
+                }
+                return o.name.replace(/(@2x)?\.png$/, '');
+            });
+            const seen = new Map();
+            stems.forEach(st => seen.set(st.toLowerCase(), (seen.get(st.toLowerCase()) || 0) + 1));
+            const finalStems = stems.map((st, ci) => (seen.get(st.toLowerCase()) > 1 ? `${st}_${ci + 1}` : st));
+            r.outputs.forEach(o => {
+                o.stem = finalStems[o.col];
+                o.name = `${o.stem}${o.tier === '2x' ? '@2x' : ''}.png`;
+            });
+            r.zipName = `${cleanStem(d.pattern.replace(/\{\w+\}/g, '')) || base}.zip`;
+        }
+
+        function resetNames() {
+            const d = cur();
+            d.names = {};
+            d.pattern = '';
+            $('inPattern').value = '';
+            update();
+        }
+
+        // Draws source rows [sy, sy+sh) into the destination rect; rows outside the image stay transparent.
+        function drawSourceRegion(ctx, src, sy, sh, dx, dy, dw, dh) {
+            const y0 = Math.max(0, sy);
+            const y1 = Math.min(src.height, sy + sh);
+            if (y1 <= y0 || src.width === 0) return;
+            const k = dh / sh;
+            ctx.drawImage(src, 0, y0, src.width, y1 - y0, dx, dy + (y0 - sy) * k, dw, (y1 - y0) * k);
+        }
+
+        // ---------------------------------------------------------------------
+        // Resizing. Browser smoothing is bilinear and visibly softens 2× up/down
+        // scaling, so the default is a Lanczos-3 resampler on premultiplied alpha
+        // (no dark fringes around transparent edges).
+        // ---------------------------------------------------------------------
+
+        const pixelCache = new WeakMap();
+        function srcPixels(src) {
+            let px = pixelCache.get(src);
+            if (!px) {
+                px = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, src.width, src.height).data;
+                pixelCache.set(src, px);
+            }
+            return px;
+        }
+
+        function lanczos(x) {
+            if (x === 0) return 1;
+            if (x <= -3 || x >= 3) return 0;
+            const px = Math.PI * x;
+            return 3 * Math.sin(px) * Math.sin(px / 3) / (px * px);
+        }
+
+        // Filter taps for mapping srcSpan source pixels (starting at srcStart) onto dstLen pixels.
+        function lanczosTaps(srcStart, srcSpan, dstLen) {
+            const scale = dstLen / srcSpan;
+            const fs = Math.max(1, 1 / scale); // widen the kernel when shrinking
+            const support = 3 * fs;
+            const taps = [];
+            for (let i = 0; i < dstLen; i++) {
+                const center = srcStart + (i + 0.5) / scale - 0.5;
+                const lo = Math.floor(center - support) + 1;
+                const hi = Math.floor(center + support);
+                const idx = [];
+                const wts = [];
+                let sum = 0;
+                for (let j = lo; j <= hi; j++) {
+                    const w = lanczos((j - center) / fs);
+                    if (w === 0) continue;
+                    idx.push(j);
+                    wts.push(w);
+                    sum += w;
+                }
+                for (let k = 0; k < wts.length; k++) wts[k] /= sum;
+                taps.push({ idx, wts });
+            }
+            return taps;
+        }
+
+        // Resamples source rows [sy, sy+sh) (full width, starting at column sx) to dw×dh. Columns clamp
+        // at the image edge unless the image is shifted (sx ≠ 0), where uncovered columns are transparent;
+        // rows outside the image count as transparent, since they are padding by definition.
+        function lanczosResample(src, sy, sh, dw, dh, sx = 0) {
+            const W = src.width;
+            const H = src.height;
+            const px = srcPixels(src);
+            const xt = lanczosTaps(sx, W, dw);
+            const yt = lanczosTaps(sy, sh, dh);
+
+            let rowLo = Infinity, rowHi = -Infinity;
+            yt.forEach(t => t.idx.forEach(j => { if (j >= 0 && j < H) { rowLo = Math.min(rowLo, j); rowHi = Math.max(rowHi, j); } }));
+            const out = new ImageData(dw, dh);
+            if (rowLo > rowHi) return out;
+
+            // Horizontal pass into premultiplied float rows
+            const rows = rowHi - rowLo + 1;
+            const tmp = new Float32Array(rows * dw * 4);
+            for (let r = 0; r < rows; r++) {
+                const srcRow = (rowLo + r) * W * 4;
+                for (let x = 0; x < dw; x++) {
+                    const { idx, wts } = xt[x];
+                    let cr = 0, cg = 0, cb = 0, ca = 0;
+                    for (let k = 0; k < idx.length; k++) {
+                        if (sx !== 0 && (idx[k] < 0 || idx[k] >= W)) continue;
+                        const col = Math.min(W - 1, Math.max(0, idx[k]));
+                        const p = srcRow + col * 4;
+                        const a = px[p + 3] / 255;
+                        const w = wts[k];
+                        cr += px[p] * a * w;
+                        cg += px[p + 1] * a * w;
+                        cb += px[p + 2] * a * w;
+                        ca += a * w;
+                    }
+                    const o = (r * dw + x) * 4;
+                    tmp[o] = cr; tmp[o + 1] = cg; tmp[o + 2] = cb; tmp[o + 3] = ca;
+                }
+            }
+
+            // Vertical pass, then un-premultiply
+            const d = out.data;
+            for (let y = 0; y < dh; y++) {
+                const { idx, wts } = yt[y];
+                for (let x = 0; x < dw; x++) {
+                    let cr = 0, cg = 0, cb = 0, ca = 0;
+                    for (let k = 0; k < idx.length; k++) {
+                        const j = idx[k];
+                        if (j < 0 || j >= H) continue;
+                        const o = ((j - rowLo) * dw + x) * 4;
+                        const w = wts[k];
+                        cr += tmp[o] * w;
+                        cg += tmp[o + 1] * w;
+                        cb += tmp[o + 2] * w;
+                        ca += tmp[o + 3] * w;
+                    }
+                    writePremultiplied(d, (y * dw + x) * 4, cr, cg, cb, ca);
+                }
+            }
+            return out;
+        }
+
+        // Clamps a premultiplied pixel (colors 0..255×alpha, alpha 0..1) and stores it straight.
+        function writePremultiplied(d, o, r, g, b, a) {
+            a = Math.min(1, Math.max(0, a));
+            if (a <= 1 / 512) {
+                d[o] = d[o + 1] = d[o + 2] = d[o + 3] = 0;
+                return;
+            }
+            const lim = 255 * a;
+            d[o] = Math.min(lim, Math.max(0, r)) / a;
+            d[o + 1] = Math.min(lim, Math.max(0, g)) / a;
+            d[o + 2] = Math.min(lim, Math.max(0, b)) / a;
+            d[o + 3] = a * 255;
+        }
+
+        // Unsharp mask (3×3 blur) on premultiplied values; restores edge contrast lost to resizing.
+        function sharpenImage(img, amount) {
+            const { width: w, height: h, data: d } = img;
+            const pre = new Float32Array(w * h * 4);
+            for (let i = 0; i < w * h; i++) {
+                const a = d[i * 4 + 3] / 255;
+                pre[i * 4] = d[i * 4] * a;
+                pre[i * 4 + 1] = d[i * 4 + 1] * a;
+                pre[i * 4 + 2] = d[i * 4 + 2] * a;
+                pre[i * 4 + 3] = a;
+            }
+            const K = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const blur = [0, 0, 0, 0];
+                    let k = 0;
+                    for (let dy = -1; dy <= 1; dy++) {
+                        const yy = y + dy;
+                        for (let dx = -1; dx <= 1; dx++, k++) {
+                            const xx = x + dx;
+                            if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+                            const p = (yy * w + xx) * 4;
+                            for (let c = 0; c < 4; c++) blur[c] += pre[p + c] * K[k] / 16;
+                        }
+                    }
+                    const p = (y * w + x) * 4;
+                    const v = c => pre[p + c] + amount * (pre[p + c] - blur[c]);
+                    writePremultiplied(d, p, v(0), v(1), v(2), v(3));
+                }
+            }
+        }
+
+        // Resizes source rows [sy, sy+sh) to dw×dh with the chosen method, into ctx at the top-left.
+        function resizeInto(ctx, src, sy, sh, dw, dh, sx = 0) {
+            if (S.resize === 'sharp') {
+                ctx.putImageData(lanczosResample(src, sy, sh, dw, dh, sx), 0, 0);
+            } else {
+                ctx.imageSmoothingEnabled = S.resize === 'smooth';
+                ctx.imageSmoothingQuality = 'high';
+                drawSourceRegion(ctx, src, sy, sh, -sx * dw / src.width, 0, dw, dh);
+            }
+        }
+
+        // Turns a canvas clockwise by quarter turns. 90° steps on integer sizes map pixels 1:1 (lossless).
+        // For non-square art the turned image is centered in the original frame.
+        function rotateCanvas(c, turns) {
+            const out = document.createElement('canvas');
+            out.width = c.width;
+            out.height = c.height;
+            const ctx = out.getContext('2d');
+            ctx.imageSmoothingEnabled = false;
+            ctx.translate(c.width / 2, c.height / 2);
+            ctx.rotate(turns * Math.PI / 2);
+            ctx.drawImage(c, -c.width / 2, -c.height / 2);
+            return out;
+        }
+
+        function renderOutput(o) {
+            const c = document.createElement('canvas');
+            c.width = o.w;
+            c.height = o.h;
+            const ctx = c.getContext('2d');
+            const { sy, sh, dh, baseH } = o.region;
+            if (!o.viaBase) {
+                resizeInto(ctx, o.src, sy, sh, o.w, dh);
+            } else {
+                // Rotation only makes sense on the un-squished art. Restore it as a square at the
+                // larger of its two axes (enlarging the short one, so no detail from the long one is
+                // thrown away), turn it exactly, then resize once to the output size. Every direction
+                // of an arrow set takes this same path, so they differ only by the rotation.
+                const k = Math.max(1, sh / baseH);
+                const base = document.createElement('canvas');
+                base.width = Math.round(o.src.width * k);
+                base.height = Math.round(baseH * k);
+                // A fractional sideways start puts the arrow's center exactly in the middle before turning
+                resizeInto(base.getContext('2d'), o.src, sy, sh, base.width, base.height, -(o.region.shiftX || 0));
+                const turned = o.turns ? rotateCanvas(base, o.turns) : base;
+                resizeInto(ctx, turned, 0, turned.height, o.w, dh);
+            }
+            if (S.sharpen > 0) {
+                const img = ctx.getImageData(0, 0, o.w, o.h);
+                sharpenImage(img, S.sharpen);
+                ctx.putImageData(img, 0, 0);
+            }
+            return c;
+        }
+
+        // Preview display: show real pixels when zoomed in so blur can be judged.
+        function applySmoothing(ctx, scale) {
+            ctx.imageSmoothingEnabled = scale < 1;
+            ctx.imageSmoothingQuality = 'high';
+        }
+
+        // Source rows that end up in the output: the crop, or more when artwork past the box is kept.
+        function keptRows(r) {
+            return r.overflow ? [r.overflow.y0, r.overflow.y1] : [r.yStart, r.yEnd];
+        }
+
+        // Problems worth telling the user about, for tools that read a skin PNG.
+        function checkCrop(r) {
+            const ab = r.d.ab;
+            if (!ab) return { level: 'err', text: 'The image has no visible pixels.' };
+            const issues = [];
+            let level = 'ok';
+            let suggest = null;
+
+            // Rounded: crops fitted to the outline use fractional rows, which should not raise warnings
+            const [keepTop, keepEnd] = keptRows(r);
+            const cutTop = Math.max(0, Math.round(keepTop - ab.top));
+            const cutBottom = Math.max(0, Math.round(ab.bottom - keepEnd));
+            if (r.overflow) {
+                const ov = r.overflow;
+                const cut = r.main && r.main.cutBelow;
+                issues.push(`The artwork is drawn past its ColumnWidth box (${[ov.above && `${ov.above} px above`, ov.below && `${ov.below} px below`].filter(Boolean).join(', ')}). osu! draws it anyway, so it is kept` +
+                    (cut ? `, except ${cut} px that would reach below the screen bottom at the new HitPosition.` : ' and nothing is cut off.'));
+                if (cut) level = 'warn';
+            }
+            if (cutTop || cutBottom) {
+                level = 'err';
+                issues.push(`The crop cuts off part of the artwork (${[cutTop && `${cutTop} px at the top`, cutBottom && `${cutBottom} px at the bottom`].filter(Boolean).join(', ')}). Check the skin.ini values and resolution.`);
+                if (r.crop === 'strict') suggest = 'center';
+            }
+            if (Math.round(r.yStart) < 0) {
+                if (level === 'ok') level = 'warn';
+                issues.push(`The PNG is ${-Math.round(r.yStart)} px too short for these skin.ini values; the missing rows are left transparent.`);
+            }
+            const offset = (ab.top + ab.bottom) / 2 - (r.box.start + r.box.end) / 2;
+            if (Math.abs(offset) >= 2 && r.crop === 'strict' && !r.fitted && !r.overflow) {
+                if (level === 'ok') level = 'warn';
+                issues.push(`The artwork sits ${Math.abs(offset).toFixed(0)} px ${offset < 0 ? 'higher' : 'lower'} than the skin.ini values say (probably placed by eye).`);
+                if (!suggest) suggest = 'center';
+            }
+            return { level, text: issues.join(' '), suggest };
+        }
+
+        // =====================================================================
+        // Drawing
+        // =====================================================================
+
+        function drawCheckerboard(ctx, x, y, w, h) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+            const t = 8;
+            for (let py = 0; py < h; py += t) {
+                for (let px = 0; px < w; px += t) {
+                    ctx.fillStyle = (Math.floor(px / t) + Math.floor(py / t)) % 2 === 0 ? '#4a4a4a' : '#3d3d3d';
+                    ctx.fillRect(x + px, y + py, t, t);
+                }
+            }
+            ctx.restore();
+        }
+
+        // Sizes a canvas to its wrapper's content box at devicePixelRatio; returns CSS-pixel dims.
+        function prepCanvas(c) {
+            const parent = c.parentElement;
+            const cs = getComputedStyle(parent);
+            const W = Math.max(1, parent.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+            const H = Math.max(1, parent.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom));
+            const dpr = window.devicePixelRatio || 1;
+            // Absolutely positioned so the canvas never feeds back into its wrapper's layout size
+            c.style.position = 'absolute';
+            c.style.left = cs.paddingLeft;
+            c.style.top = cs.paddingTop;
+            c.style.width = W + 'px';
+            c.style.height = H + 'px';
+            c.width = Math.round(W * dpr);
+            c.height = Math.round(H * dpr);
+            const ctx = c.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, W, H);
+            return { ctx, W, H };
+        }
+
+        function emptyText(ctx, W, H, text) {
+            ctx.fillStyle = '#999';
+            ctx.font = `12px ${MONO}`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, W / 2, H / 2);
+        }
+
+        function label(ctx, text, x, y, color, align = 'right') {
+            ctx.fillStyle = color;
+            ctx.font = `10px ${MONO}`;
+            ctx.textAlign = align;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, x, y);
+        }
+
+        function drawPreviews(r) {
+            const b = prepCanvas($('cvBefore'));
+            const a = prepCanvas($('cvAfter'));
+            if (!r) {
+                emptyText(b.ctx, b.W, b.H, 'No image loaded');
+                emptyText(a.ctx, a.W, a.H, 'No image loaded');
+                return;
+            }
+            const o = r.preview;
+            const out = renderOutput(o);
+            // Before shows any part of the crop box that hangs above the PNG
+            const minY = r.yStart !== undefined ? Math.min(0, r.yStart, r.box.start) : 0;
+            const spanBefore = r.H - minY;
+            // Each side is scaled to fill its own box, so the chosen output can be inspected closely
+            const scale = Math.min((b.W - 50) / r.W, (b.H - 24) / spanBefore, 4);
+            const ascale = Math.min((a.W - 50) / o.w, (a.H - 24) / o.h, 4);
+
+            // --- Before ---
+            const ctx = b.ctx;
+            applySmoothing(ctx, scale);
+            const bw = r.W * scale;
+            const bx = (b.W - bw) / 2 + 8;
+            const top = (b.H - spanBefore * scale) / 2;
+            const Y = py => top + (py - minY) * scale;
+            drawCheckerboard(ctx, bx, Y(0), bw, r.H * scale);
+            ctx.drawImage(r.d.src, bx, Y(0), bw, r.H * scale);
+
+            if (r.yStart !== undefined) {
+                const [kTop, kEnd] = keptRows(r);
+                if (kTop > 0) {
+                    ctx.fillStyle = 'rgba(168, 85, 247, 0.30)';
+                    ctx.fillRect(bx, Y(0), bw, kTop * scale);
+                }
+                if (kEnd < r.H) {
+                    ctx.fillStyle = 'rgba(244, 63, 94, 0.30)';
+                    ctx.fillRect(bx, Y(kEnd), bw, (r.H - kEnd) * scale);
+                }
+                if (r.crop !== 'strict' || r.fitted || r.overflow) {
+                    ctx.save();
+                    ctx.strokeStyle = '#ff66aa';
+                    ctx.setLineDash([3, 3]);
+                    ctx.strokeRect(bx - 3, Y(r.box.start), bw + 6, r.box.boxH * scale);
+                    ctx.restore();
+                }
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(bx, Y(kTop), bw, (kEnd - kTop) * scale);
+                label(ctx, '0', bx - 4, Y(0), '#bbb');
+                label(ctx, String(r.H), bx - 4, Y(r.H), '#bbb');
+                if (kTop !== 0 && Math.abs(Y(kTop) - Y(0)) > 10) label(ctx, String(Math.round(kTop)), bx - 4, Y(kTop), '#7dd3fc');
+                if (Math.abs(Y(kEnd) - Y(r.H)) > 10) label(ctx, String(Math.round(kEnd)), bx - 4, Y(kEnd), '#7dd3fc');
+            }
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(bx, Y(0), bw, r.H * scale);
+
+            // --- After ---
+            const actx = a.ctx;
+            applySmoothing(actx, ascale);
+            const aw = o.w * ascale;
+            const ah = o.h * ascale;
+            const ax = (a.W - aw) / 2 + 8;
+            const ay = (a.H - ah) / 2;
+            drawCheckerboard(actx, ax, ay, aw, ah);
+            actx.drawImage(out, ax, ay, aw, ah);
+            if (r.mode === 'restore') {
+                actx.strokeStyle = '#4ade80';
+                actx.lineWidth = 1;
+                actx.strokeRect(ax, ay, aw, ah);
+            } else {
+                const gh = o.graphicH * ascale;
+                const gy = ay + (o.above || 0) * ascale; // the box starts lower when art above it is kept
+                if (o.pad > 0) {
+                    actx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+                    actx.fillRect(ax, gy + gh, aw, o.pad * ascale);
+                }
+                actx.strokeStyle = '#ff66aa';
+                actx.lineWidth = 1.5;
+                actx.strokeRect(ax, gy, aw, gh);
+                actx.strokeStyle = '#999';
+                actx.lineWidth = 1;
+                actx.strokeRect(ax, ay, aw, ah);
+                label(actx, '0', ax - 4, ay, '#bbb');
+                if (o.above && gy - ay > 10) label(actx, String(o.above), ax - 4, gy, '#ff8cc0');
+                if (o.pad > 0 && gh > 10) label(actx, String((o.above || 0) + o.graphicH), ax - 4, gy + gh, '#ff8cc0');
+                label(actx, String(o.h), ax - 4, ay + ah, '#bbb');
+            }
+        }
+
+        // In-game view in osu!'s 480-unit screen space. A KeyImage is stretched to ColumnWidth
+        // horizontally, keeps its pixel height (1 unit = 1.6 px at 1x, 3.2 px at @2x) and is
+        // anchored to the screen bottom; notes are ColumnWidth squares landing on HitPosition.
+        function drawGame(r) {
+            const show = S.mode !== 'restore';
+            $('gameBox').classList.toggle('hidden', !show);
+            if (!show) return;
+            const vp = $('cvGame').parentElement;
+            if (!r) {
+                vp.style.height = '160px';
+                const g = prepCanvas($('cvGame'));
+                emptyText(g.ctx, g.W, g.H, 'No image loaded');
+                return;
+            }
+            const d = r.d;
+            const GAME_KEYS = r.nKeys;
+            const groups = [];
+            if (S.mode === 'convert') {
+                groups.push({ title: `current: ${fmt(r.cw)} / ${fmt(r.hp)}`, imgs: Array(GAME_KEYS).fill(d.src), cw: r.cw, hp: r.hp, hUnits: r.H / r.M });
+            }
+            const rendered = new Map();
+            const imgs = r.gameImgs.map(o => {
+                if (!rendered.has(o)) rendered.set(o, renderOutput(o));
+                return rendered.get(o);
+            });
+            groups.push({
+                title: S.mode === 'convert' ? `new: ${fmt(r.outCW)} / ${fmt(r.outHP)}` : `${fmt(r.outCW)} / ${fmt(r.outHP)}`,
+                imgs, cw: r.outCW, hp: r.outHP, hUnits: r.main.h / r.M
+            });
+
+            // Show the bottom part of the screen that holds the receptors and a note above them
+            const topUnits = Math.max(0, Math.min(...groups.map(gr => Math.min(gr.hp - gr.cw * 1.6, 480 - gr.hUnits))) - 8);
+            const span = 480 - topUnits;
+            const gapPx = 40;
+            const totalCols = groups.reduce((sum, gr) => sum + gr.cw * GAME_KEYS, 0);
+            // Size the box to the playfield: fill the width, then use only the height that needs
+            const innerW = vp.clientWidth - 12;
+            const unitW = (innerW - 30 - gapPx * (groups.length - 1)) / totalCols;
+            const wantH = Math.round(Math.min(420, Math.max(160, span * unitW + 40 + 12)));
+            if (vp.style.height !== wantH + 'px') vp.style.height = wantH + 'px';
+            const g = prepCanvas($('cvGame'));
+            const unit = Math.min((g.H - 40) / span, unitW);
+            const Y = u => 22 + (u - topUnits) * unit;
+            const groupsW = totalCols * unit + gapPx * (groups.length - 1);
+            let x = (g.W - groupsW) / 2;
+
+            const ctx = g.ctx;
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            for (const gr of groups) {
+                const colW = gr.cw * unit;
+                const w = colW * GAME_KEYS;
+                ctx.fillStyle = '#161616';
+                ctx.fillRect(x, Y(topUnits), w, Y(480) - Y(topUnits));
+                for (let c = 0; c < GAME_KEYS; c++) {
+                    ctx.drawImage(gr.imgs[c], x + c * colW, Y(480) - gr.hUnits * unit, colW, gr.hUnits * unit);
+                }
+                ctx.strokeStyle = '#555';
+                ctx.lineWidth = 1;
+                for (let c = 0; c <= GAME_KEYS; c++) {
+                    ctx.beginPath();
+                    ctx.moveTo(x + c * colW + 0.5, Y(topUnits));
+                    ctx.lineTo(x + c * colW + 0.5, Y(480));
+                    ctx.stroke();
+                }
+                // A note that has just reached HitPosition, in the second column
+                const noteX = x + colW;
+                ctx.fillStyle = 'rgba(251, 191, 36, 0.18)';
+                ctx.fillRect(noteX, Y(gr.hp) - colW, colW, colW);
+                ctx.strokeStyle = '#fbbf24';
+                ctx.lineWidth = 1.5;
+                ctx.strokeRect(noteX, Y(gr.hp) - colW, colW, colW);
+                // HitPosition line
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x - 6, Y(gr.hp));
+                ctx.lineTo(x + w + 6, Y(gr.hp));
+                ctx.stroke();
+
+                label(ctx, gr.title, x + w / 2, 10, '#ddd', 'center');
+                x += w + gapPx;
+            }
+            // Screen bottom
+            ctx.strokeStyle = '#f43f5e';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(8, Y(480));
+            ctx.lineTo(g.W - 8, Y(480));
+            ctx.stroke();
+        }
+
+        // =====================================================================
+        // UI
+        // =====================================================================
+
+        function boxHint(cw, M) { return `${Math.round(cw * M)} px tall`; }
+        function padHint(hp, M) { return `${Math.round((480 - hp) * M)} px below`; }
+
+        function update() {
+            const d = cur();
+            // Until a new ColumnWidth is typed, Convert keeps the one the images were made for
+            if (S.mode === 'convert' && !d.ncwTyped && d.src) {
+                d.ncw = usedValues(d).cw;
+                $('inNCW').value = d.ncw;
+            }
+            const r = compute();
+            const M = r ? r.M : M1X;
+
+            $('hintCW').textContent = d.cw == null ? '' : boxHint(d.cw, M);
+            $('hintHP').textContent = d.hp == null ? '' : padHint(d.hp, M);
+            if (S.mode === 'convert') {
+                $('hintNCW').textContent = boxHint(d.ncw, M);
+                $('hintNHP').textContent = padHint(d.nhp, M);
+            }
+            $('detectText').textContent = r ? r.detText : '';
+
+            // Estimated skin.ini values
+            const gb = $('guessBox');
+            const g = d.guess;
+            if (MODES[S.mode].skinInput && d.src && r) {
+                gb.classList.remove('hidden');
+                const u = r.used;
+                const vals = p => `${fmt(p.cw)} / ${fmt(p.hp)}`;
+                let html = '';
+                if (g) {
+                    const pick = d.guessPick || g.best;
+                    const opt = (p, i) => p === pick && u.from === 'image'
+                        ? `<b>${vals(p)}</b>`
+                        : `<button class="link" onclick="useGuess(${i})">${vals(p)}</button>`;
+                    html += `The ${g.count > 1 ? `${g.count} images look` : 'image looks'} made for ColumnWidth / HitPosition ${opt(g.best, -1)}` +
+                        (g.alts.length ? ` <span class="hint">(close: ${g.alts.map((p, i) => opt(p, i)).join(', ')})</span>` : '') + '. ';
+                } else {
+                    html += 'Could not estimate the values from the image. ';
+                }
+                html += u.from === 'ini' ? `Using your skin.ini values <b>${vals(u)}</b>.`
+                    : u.from === 'default' ? 'Enter the skin.ini values above.'
+                    : u.why === 'misfit' ? `Using the estimate: your skin.ini values ${vals(d)} don't fit the artwork.`
+                    : u.why === 'noIni' ? 'Using the estimate. Enter your skin.ini values above if you know them.'
+                    : 'Using the estimate.';
+                html += `<br><button class="link" onclick="$('setInput').click()">Add the skin's other receptor images</button>` +
+                    ` <span class="hint">(pressed, unpressed, 1x, @2x: one answer for the whole set)</span>`;
+                if (d.setImgs.length) html += ` · ${d.setImgs.length} added <button class="link" onclick="clearSet()">Clear</button>`;
+                gb.innerHTML = html;
+            } else {
+                gb.classList.add('hidden');
+            }
+
+            // Notice
+            const notice = $('notice');
+            if (!r) {
+                notice.className = 'msg info';
+                notice.textContent = S.mode === 'make'
+                    ? 'Load a square receptor image (for example 150×150 or 300×300 for @2x).'
+                    : 'Load a receptor PNG from a skin (for example mania-key1@2x.png). Its skin.ini values are estimated; enter the real ones if you know them.';
+            } else {
+                const res = `${r.is2x ? '@2x' : '1x'}${d.scale === 'auto' ? '' : ' (set manually)'}`;
+                let text = '';
+                if (S.mode === 'restore') {
+                    text = `Read as ${res}. Removed ${Math.max(0, Math.round(r.H - r.yEnd))} px of empty space below and ${Math.max(0, Math.round(r.yStart))} px above, ` +
+                           `then stretched the height ×${(r.W / r.box.boxH).toFixed(2)} to make it square again.`;
+                } else if (S.mode === 'make') {
+                    const o = r.main;
+                    text = `Read as ${res}. The image is squished to ${o.w}×${o.graphicH} px and ${o.pad} px of empty space is added below it ` +
+                           `so it sits on HitPosition ${fmt(d.hp)}.` + (r.W !== r.H ? ` The image is not square (${r.W}×${r.H}); its proportions are kept.` : '');
+                } else {
+                    const o = r.main;
+                    const changes = [];
+                    if (r.hp !== d.nhp) changes.push(`HitPosition ${fmt(r.hp)} → ${fmt(d.nhp)}: empty space below goes from ${r.box.bottomPadPx} to ${o.pad} px.`);
+                    if (r.cw !== d.ncw) changes.push(`ColumnWidth ${fmt(r.cw)} → ${fmt(d.ncw)}: receptor height goes from ${r.box.boxH} to ${o.graphicH} px.`);
+                    text = `Read as ${res}. ` + (changes.length ? changes.join(' ') : 'The new values are the same as the current ones, so only extra space above is removed.');
+                }
+                let level = 'ok';
+                let suggestBtn = '';
+                if (S.mode !== 'restore' && d.offset) {
+                    const off2x = Math.round(d.offset * 2);
+                    text += ` Receptor moved ${fmt(Math.abs(d.offset))} px ${d.offset > 0 ? 'up' : 'down'} at 1x (${Math.abs(off2x)} px at @2x).`;
+                    if (r.outputs.some(o => o.offsetClamped)) {
+                        level = 'warn';
+                        text += ' It cannot go lower than the screen bottom, so the offset is limited.';
+                    }
+                }
+                if (r.fitted) {
+                    text += ` Arrow proportions taken from its outline (${r.fitted.artW}×${r.fitted.artH} px), which matches a current ColumnWidth of about ${fmt(r.fitted.impliedCW, 1)}.`;
+                }
+                if (d.rotMode === 'set' && r.main.w !== (r.main.graphicH || r.main.h)) {
+                    text += ' Note: with "Same as the image" width the arrow area is not square, so up/down arrows come out slightly different from left/right. Set Output width to "Note size" (Advanced options) to make them identical.';
+                }
+                if (MODES[S.mode].skinInput) {
+                    const chk = checkCrop(r);
+                    if (chk.level === 'err' || level === 'ok') level = chk.level;
+                    if (chk.text) text += ' ' + chk.text;
+                    if (chk.suggest) suggestBtn = `<br><button class="btn" onclick="setOption('crop', '${chk.suggest}')">Center the crop on the artwork</button>`;
+                }
+                notice.className = `msg ${level}`;
+                notice.innerHTML = escapeHtml(text) + suggestBtn;
+            }
+
+            // Captions and legend
+            $('capBefore').textContent = r ? `${r.W} × ${r.H}` : '';
+            $('capAfter').textContent = r ? `${r.preview.w} × ${r.preview.h}${r.preview.native ? '' : ' (resized)'}` : '';
+            const pv = $('selPreview');
+            const pvOpts = r ? r.outputs.map(o => `<option value="${o.key}">${o.label}</option>`).join('') : '';
+            if (pv.dataset.opts !== pvOpts) {
+                pv.innerHTML = pvOpts;
+                pv.dataset.opts = pvOpts;
+            }
+            if (r) pv.value = r.preview.key;
+            const sw = c => `<span class="swatch" style="background:${c}"></span>`;
+            $('legend').innerHTML = S.mode === 'restore'
+                ? `${sw('#38bdf8')}kept ${sw('#f43f5e')}removed below ${sw('#a855f7')}removed above`
+                : S.mode === 'make'
+                    ? `${sw('#ff66aa')}receptor ${sw('#38bdf8')}empty space for HitPosition`
+                    : `Before: ${sw('#38bdf8')}kept ${sw('#f43f5e')}removed below ${sw('#a855f7')}removed above. After: ${sw('#ff66aa')}receptor ${sw('#38bdf8')}empty space for HitPosition`;
+
+            // Output list
+            $('outRows').innerHTML = r
+                ? r.outputs.map((o, i) => `
+                    <tr>
+                        <td>${o.label}${o.native ? '' : ' <span class="hint">(resized)</span>'}</td>
+                        <td class="mono">${o.w} × ${o.h}</td>
+                        <td><div class="fname-cell"><input type="text" class="fname" data-col="${o.col}" value="${escapeHtml(o.stem)}" spellcheck="false" title="Applies to both the 1x and @2x file of this key"><span class="ext mono">${o.tier === '2x' ? '@2x' : ''}.png</span></div></td>
+                        <td class="r"><button class="btn" onclick="saveOne(${i})">Save</button></td>
+                    </tr>`).join('')
+                : '<tr><td colspan="4" class="hint">Nothing to save yet.</td></tr>';
+            $('btnZip').disabled = !r;
+
+            renderSkin(d, r);
+            drawPreviews(r);
+            drawGame(r);
+        }
+
+        function syncInputs() {
+            const d = cur();
+            $('inCW').value = d.cw ?? '';
+            $('inHP').value = d.hp ?? '';
+            $('sourceRow').classList.toggle('hidden', !MODES[S.mode].skinInput);
+            if (MODES[S.mode].skinInput) $('selSource').value = d.source;
+            $('keepRow').classList.toggle('hidden', S.mode !== 'convert');
+            if (S.mode === 'convert') $('chkKeep').checked = d.keepOverflow;
+            if (S.mode === 'convert') {
+                $('inNCW').value = d.ncw;
+                $('inNHP').value = d.nhp;
+            }
+            if (S.mode !== 'restore') $('inOff').value = d.offset;
+            $('selSrcDir').value = d.srcDir;
+            $('chkFit').checked = d.fitOutline;
+            $('fitOutlineRow').classList.toggle('hidden', !MODES[S.mode].skinInput);
+            $('inPattern').value = d.pattern;
+            $('selOneDir').value = d.oneDir;
+            document.querySelectorAll('input[name="rotMode"]').forEach(x => { x.checked = x.value === d.rotMode; });
+            $('selSetKeys').value = d.setDirs.length;
+            const dirOpts = dir => ['left', 'up', 'down', 'right'].map(v => `<option value="${v}"${v === dir ? ' selected' : ''}>${v[0].toUpperCase() + v.slice(1)}</option>`).join('');
+            const dirsHtml = d.setDirs.map((dir, i) => `<select class="setDir" data-i="${i}" title="Key ${i + 1}">${dirOpts(dir)}</select>`).join(' ');
+            if ($('setDirs').dataset.html !== dirsHtml) {
+                $('setDirs').innerHTML = dirsHtml;
+                $('setDirs').dataset.html = dirsHtml;
+            }
+            $('setDirsRow').style.opacity = d.rotMode === 'set' ? 1 : 0.5;
+            document.querySelectorAll('input[name="scale"]').forEach(x => { x.checked = x.value === d.scale; });
+            document.querySelectorAll('input[name="crop"]').forEach(x => { x.checked = x.value === d.crop; });
+            document.querySelectorAll('input[name="width"]').forEach(x => { x.checked = x.value === d.width; });
+        }
+
+        function setMode(mode) {
+            S.mode = mode;
+            Object.keys(MODES).forEach(m => $(`tab-${m}`).classList.toggle('active', m === mode));
+            $('modeDesc').textContent = MODES[mode].desc;
+            $('oldLabel').textContent = MODES[mode].oldLabel;
+            $('newGroup').classList.toggle('hidden', mode !== 'convert');
+            $('offsetGroup').classList.toggle('hidden', mode === 'restore');
+            $('cropGroup').classList.toggle('hidden', !MODES[mode].skinInput);
+            $('cropTightLabel').classList.toggle('hidden', mode === 'convert');
+            updateFileStatus();
+            syncInputs();
+            update();
+        }
+
+        function setOption(key, value) {
+            cur()[key] = value;
+            syncInputs();
+            update();
+        }
+
+        function updateFileStatus() {
+            const d = cur();
+            $('fileStatus').innerHTML = d.src
+                ? `<span class="mono">${escapeHtml(d.name)}</span> (${d.src.width}×${d.src.height} px)`
+                : 'No image loaded.';
+            $('btnRemove').classList.toggle('hidden', !d.src);
+        }
+
+        // Decodes an image file into a canvas (what every measurement reads from).
+        function readImage(file) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const c = document.createElement('canvas');
+                    c.width = img.naturalWidth;
+                    c.height = img.naturalHeight;
+                    c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0);
+                    resolve(c);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('unreadable'));
+                };
+                img.src = url;
+            });
+        }
+
+        const isImageFile = f => f && /^image\//.test(f.type);
+
+        // Loads the image to work on. Any extra files (several dropped or picked at once) are taken as
+        // the skin's other receptor images and only used for the estimate.
+        async function loadFile(file, extra = []) {
+            if (!isImageFile(file)) {
+                showToast('Not an image. Use PNG, WebP or JPEG.');
+                return;
+            }
+            const mode = S.mode;
+            let c;
+            try {
+                c = await readImage(file);
+            } catch {
+                showToast('Could not read that image.');
+                return;
+            }
+            const d = S.data[mode];
+            Object.assign(d, { src: c, name: file.name || 'pasted.png', ab: scanAlphaBounds(c), scale: 'auto', crop: 'strict', preview: null, names: {}, fromSkin: null });
+            if (MODES[mode].skinInput) {
+                d.setImgs = [];
+                if (extra.length) await addSetFiles(d, extra);
+                estimate(d);
+            }
+            if (mode === S.mode) {
+                updateFileStatus();
+                syncInputs();
+                update();
+            }
+        }
+
+        async function addSetFiles(d, files) {
+            let added = 0;
+            for (const f of files) {
+                if (!isImageFile(f) || f.name === d.name || d.setImgs.some(a => a.name === f.name)) continue;
+                try {
+                    const c = await readImage(f);
+                    d.setImgs.push({ name: f.name, W: c.width, H: c.height, ab: scanAlphaBounds(c) });
+                    added++;
+                } catch { /* skip unreadable files */ }
+            }
+            return added;
+        }
+
+        async function onSetInput(e) {
+            const files = Array.from(e.target.files || []);
+            e.target.value = '';
+            const d = cur();
+            if (!d.src || !MODES[S.mode].skinInput) return;
+            const added = await addSetFiles(d, files);
+            estimate(d);
+            update();
+            showToast(added ? `Added ${added} image${added > 1 ? 's' : ''} to the estimate.` : 'No new images added.');
+        }
+
+        function clearSet() {
+            const d = cur();
+            d.setImgs = [];
+            estimate(d);
+            update();
+        }
+
+        function onFileInput(e) {
+            const files = Array.from(e.target.files || []);
+            if (files.length) loadFile(files[0], files.slice(1));
+            e.target.value = '';
+        }
+
+        function removeImage() {
+            Object.assign(cur(), { src: null, name: '', ab: null, setImgs: [], guess: null, guessPick: null });
+            updateFileStatus();
+            update();
+        }
+
+        // =====================================================================
+        // Saving
+        // =====================================================================
+
+        const nativeApi = () => window.pywebview && window.pywebview.api && window.pywebview.api.save_file;
+
+        // Saves a file: a native "Save as" dialog inside the desktop app, a normal download in a browser.
+        // Resolves to false only when the user cancels the native dialog.
+        async function downloadBlob(blob, name) {
+            if (nativeApi()) {
+                const b64 = await new Promise(resolve => {
+                    const fr = new FileReader();
+                    fr.onload = () => resolve(String(fr.result).split(',')[1]);
+                    fr.readAsDataURL(blob);
+                });
+                return !!(await window.pywebview.api.save_file(name, b64));
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.download = name;
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            return true;
+        }
+
+        const canvasToBlob = c => new Promise(resolve => c.toBlob(resolve, 'image/png'));
+
+        async function saveOne(i) {
+            const r = compute();
+            if (!r) return;
+            const o = r.outputs[i];
+            if (await downloadBlob(await canvasToBlob(renderOutput(o)), o.name)) showToast(`Saved ${o.name}`);
+        }
+
+        async function saveAll() {
+            const r = compute();
+            if (!r) return;
+            const blobs = await Promise.all(r.outputs.map(o => canvasToBlob(renderOutput(o))));
+            if (window.JSZip) {
+                const zip = new JSZip();
+                r.outputs.forEach((o, i) => zip.file(o.name, blobs[i]));
+                const name = r.zipName;
+                if (await downloadBlob(await zip.generateAsync({ type: 'blob' }), name)) showToast(`Saved ${name}`);
+            } else {
+                // ZIP library failed to load: save the files one by one
+                for (let i = 0; i < r.outputs.length; i++) {
+                    if (!(await downloadBlob(blobs[i], r.outputs[i].name))) return;
+                }
+                showToast('Saved the files separately.');
+            }
+        }
+
+        let toastTimer = null;
+        function showToast(msg) {
+            const t = $('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+        }
+
+        // =====================================================================
+        // Skin folder: read a skin's receptors and skin.ini, and write converted
+        // receptors back. Every file that gets replaced (and skin.ini) is first
+        // copied to "_receptor backup/<date time>/" inside the skin.
+        // =====================================================================
+
+        const BACKUP_DIR = '_receptor backup';
+        const INI_DEFAULTS = { ColumnWidth: 30, HitPosition: 402 }; // osu!'s values when skin.ini leaves them out
+
+        // Bytes <-> "binary" strings (one char per byte), so skin.ini is edited without touching any byte
+        // of the lines that are not changed, whatever its encoding.
+        const binStr = bytes => {
+            let s = '';
+            for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+            return s;
+        };
+        const binBytes = s => Uint8Array.from(s, ch => ch.charCodeAt(0));
+        const utf8Read = s => new TextDecoder().decode(binBytes(s));
+        const utf8Bin = s => binStr(new TextEncoder().encode(s));
+
+        class SkinIni {
+            constructor(bytes) {
+                this.bom = bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF;
+                this.lines = binStr(this.bom ? bytes.subarray(3) : bytes).match(/[^\n]*\n|[^\n]+/g) || [];
+            }
+            bytes() {
+                const body = binBytes(this.lines.join(''));
+                if (!this.bom) return body;
+                const out = new Uint8Array(body.length + 3);
+                out.set([0xEF, 0xBB, 0xBF]);
+                out.set(body, 3);
+                return out;
+            }
+            eol() { return this.lines.some(l => l.endsWith('\r\n')) ? '\r\n' : '\n'; }
+            static kv(line) {
+                const s = line.split('//')[0].trim();
+                const i = s.indexOf(':');
+                return i < 0 ? [null, null] : [s.slice(0, i).trim(), s.slice(i + 1).trim()];
+            }
+            // [name, firstLine, endLine) for every [Section]
+            sections() {
+                const out = [];
+                let open = null;
+                this.lines.forEach((line, i) => {
+                    const m = /^\s*\[(.+?)\]/.exec(line);
+                    if (!m) return;
+                    if (open) out.push([open[0], open[1], i]);
+                    open = [m[1].trim(), i];
+                });
+                if (open) out.push([open[0], open[1], this.lines.length]);
+                return out;
+            }
+            values([a, b]) {
+                const out = {};
+                for (let i = a + 1; i < b; i++) {
+                    const [k, v] = SkinIni.kv(this.lines[i]);
+                    if (k) out[k.toLowerCase()] = utf8Read(v);
+                }
+                return out;
+            }
+            manias() {
+                return this.sections().filter(s => s[0].toLowerCase() === 'mania')
+                    .map(([, a, b]) => ({ span: [a, b], keys: parseInt(this.values([a, b]).keys, 10) }));
+            }
+            mania(keys) {
+                const m = this.manias().find(x => x.keys === keys);
+                return m ? m.span : null;
+            }
+            keyCounts() {
+                return [...new Set(this.manias().map(x => x.keys).filter(Number.isFinite))].sort((a, b) => a - b);
+            }
+            // Replaces key's line in the section, or adds it at the section's end. Returns the section's new span.
+            set(span, key, value) {
+                const [a, b] = span;
+                const eol = this.eol();
+                const v = utf8Bin(String(value));
+                for (let i = a + 1; i < b; i++) {
+                    const [k] = SkinIni.kv(this.lines[i]);
+                    if (k && k.toLowerCase() === key.toLowerCase()) {
+                        const end = this.lines[i].endsWith('\r\n') ? '\r\n' : this.lines[i].endsWith('\n') ? '\n' : '';
+                        this.lines[i] = `${key}: ${v}${end}`;
+                        return span;
+                    }
+                }
+                let at = b;
+                while (at > a + 1 && !this.lines[at - 1].trim()) at--; // before trailing blank lines
+                if (!/\n$/.test(this.lines[at - 1])) this.lines[at - 1] += eol;
+                this.lines.splice(at, 0, `${key}: ${v}${eol}`);
+                return [a, b + 1];
+            }
+            // The [Mania] section for this key count, added at the end of the file if missing.
+            maniaOrAdd(keys) {
+                const span = this.mania(keys);
+                if (span) return span;
+                const eol = this.eol();
+                const last = this.lines.length - 1;
+                if (last >= 0 && !/\n$/.test(this.lines[last])) this.lines[last] += eol;
+                this.lines.push(eol);
+                const a = this.lines.length;
+                this.lines.push(`[Mania]${eol}`, `Keys: ${keys}${eol}`);
+                return [a, this.lines.length];
+            }
+        }
+
+        // osu!'s built-in receptor names when skin.ini doesn't set KeyImage
+        function defaultKeyImages(keys) {
+            let order;
+            if (keys === 4) {
+                order = ['1', '2', '2', '1'];
+            } else {
+                const half = [...Array(Math.floor(keys / 2))].map((_, i) => (i % 2 ? '2' : '1'));
+                order = [...half, ...(keys % 2 ? ['S'] : []), ...half.slice().reverse()];
+            }
+            return order.map(o => `mania-key${o}`);
+        }
+
+        function iniNumbers(text, n, def) {
+            const vals = String(text || '').split(',').map(s => parseFloat(s)).filter(Number.isFinite);
+            if (!vals.length) vals.push(def);
+            while (vals.length < n) vals.push(vals[vals.length - 1]);
+            return vals.slice(0, n);
+        }
+
+        // KeyImage value → path without extension, with forward slashes
+        const imageBase = name => name.replace(/\\/g, '/').trim().replace(/^\/+/, '').replace(/\.png$/i, '');
+
+        // Receptor names and skin.ini values for one key mode.
+        function skinReceptors(ini, keys) {
+            const span = ini.mania(keys);
+            const v = span ? ini.values(span) : {};
+            const hp = parseFloat(v.hitposition);
+            const defs = defaultKeyImages(keys);
+            return {
+                hasSection: !!span,
+                widths: iniNumbers(v.columnwidth, keys, INI_DEFAULTS.ColumnWidth),
+                hp: Number.isFinite(hp) ? hp : INI_DEFAULTS.HitPosition,
+                cols: defs.map((def, c) => ({
+                    col: c,
+                    up: imageBase(v[`keyimage${c}`] || def),
+                    down: imageBase(v[`keyimage${c}d`] || def + 'D'),
+                    files: { up: [], down: [] }
+                }))
+            };
+        }
+
+        const bytesToB64 = bytes => btoa(binStr(bytes));
+        const b64ToBytes = b64 => binBytes(atob(b64));
+        const canvasBytes = async c => new Uint8Array(await (await canvasToBlob(c)).arrayBuffer());
+        const hasBridge = () => !!(window.pywebview && window.pywebview.api && window.pywebview.api.pick_skin);
+
+        // Skin folder access in the desktop app (Python side, see desktop/app.py)
+        function bridgeFS(name) {
+            const api = window.pywebview.api;
+            return {
+                name,
+                async read(rel) {
+                    const b64 = await api.read_file(rel);
+                    return b64 == null ? null : b64ToBytes(b64);
+                },
+                async write(rel, bytes) { await api.write_file(rel, bytesToB64(bytes)); }
+            };
+        }
+
+        // Skin folder access in Chrome / Edge (File System Access API). Names match without regard to
+        // case, like Windows and osu! do.
+        function handleFS(root) {
+            const parts = rel => rel.split(/[\\/]+/).filter(p => p && p !== '.');
+            async function find(dir, name, kind) {
+                for await (const [n, h] of dir.entries()) {
+                    if (h.kind === kind && n.toLowerCase() === name.toLowerCase()) return h;
+                }
+                return null;
+            }
+            return {
+                name: root.name,
+                async read(rel) {
+                    const p = parts(rel);
+                    let dir = root;
+                    for (const seg of p.slice(0, -1)) {
+                        dir = await find(dir, seg, 'directory');
+                        if (!dir) return null;
+                    }
+                    const fh = await find(dir, p[p.length - 1], 'file');
+                    return fh ? new Uint8Array(await (await fh.getFile()).arrayBuffer()) : null;
+                },
+                async write(rel, bytes) {
+                    const p = parts(rel);
+                    let dir = root;
+                    for (const seg of p.slice(0, -1)) dir = (await find(dir, seg, 'directory')) || await dir.getDirectoryHandle(seg, { create: true });
+                    const name = p[p.length - 1];
+                    const fh = (await find(dir, name, 'file')) || await dir.getFileHandle(name, { create: true });
+                    const w = await fh.createWritable();
+                    await w.write(bytes);
+                    await w.close();
+                }
+            };
+        }
+
+        async function openSkin() {
+            let fs;
+            try {
+                if (hasBridge()) {
+                    const name = await window.pywebview.api.pick_skin();
+                    if (!name) return;
+                    fs = bridgeFS(name);
+                } else if (window.showDirectoryPicker) {
+                    fs = handleFS(await window.showDirectoryPicker({ id: 'skin', mode: 'readwrite' }));
+                } else {
+                    showToast('This browser cannot open folders. Use the desktop app, Chrome or Edge.');
+                    return;
+                }
+            } catch (e) {
+                if (!(e && e.name === 'AbortError')) showToast('Could not open the folder.');
+                return;
+            }
+            const iniBytes = await fs.read('skin.ini');
+            if (!iniBytes) {
+                showToast('No skin.ini in that folder. Pick a skin folder inside osu!\\Skins.');
+                return;
+            }
+            const ini = new SkinIni(iniBytes);
+            const counts = ini.keyCounts();
+            // Opens on the key mode picked last time (if the skin has it), else 4K, else the first one
+            let last = 0;
+            try { last = +localStorage.getItem('skinKeys') || 0; } catch { /* storage unavailable */ }
+            const first = counts.includes(last) ? last : counts.includes(4) ? 4 : counts[0] || 4;
+            S.skin = { fs, name: fs.name, ini, keys: 0, targets: new Set([first]), cache: new Map(), msg: null, pending: null, plan: null, busy: false };
+            await loadSkinKeys(first);
+        }
+
+        async function loadSkinFile(fs, rel) {
+            const bytes = await fs.read(rel);
+            if (!bytes) return null;
+            try {
+                const c = await readImage(new Blob([bytes], { type: 'image/png' }));
+                return {
+                    rel, name: rel.split('/').pop(), base: rel.replace(/(@2x)?\.png$/i, '').toLowerCase(),
+                    tier: has2xName(rel) ? '2x' : '1x', canvas: c, W: c.width, H: c.height, ab: scanAlphaBounds(c)
+                };
+            } catch {
+                return null;
+            }
+        }
+
+        // Every receptor file of a key mode (unpressed and pressed, 1x and @2x). Files are read once and
+        // shared between key modes that use the same image. colOf: the first column using each file.
+        async function loadModeFiles(keys) {
+            const sk = S.skin;
+            const rec = skinReceptors(sk.ini, keys);
+            const list = [];
+            const colOf = new Map();
+            for (const c of rec.cols) {
+                for (const side of ['up', 'down']) {
+                    for (const suffix of ['', '@2x']) {
+                        const rel = `${c[side]}${suffix}.png`;
+                        const key = rel.toLowerCase();
+                        if (!sk.cache.has(key)) sk.cache.set(key, await loadSkinFile(sk.fs, rel));
+                        const e = sk.cache.get(key);
+                        if (!e) continue;
+                        c.files[side].push(e);
+                        if (!colOf.has(e)) {
+                            colOf.set(e, c.col);
+                            list.push(e);
+                        }
+                    }
+                }
+            }
+            return { keys, rec, list, colOf };
+        }
+
+        // Key modes in skin.ini (other than `except`) whose receptors include this image.
+        function modesUsing(e, except) {
+            const ini = S.skin.ini;
+            return ini.keyCounts().filter(k => !except.includes(k) &&
+                skinReceptors(ini, k).cols.some(c => c.up.toLowerCase() === e.base || c.down.toLowerCase() === e.base));
+        }
+
+        // Reads every receptor file of a key mode (unpressed and pressed, 1x and @2x).
+        async function loadSkinKeys(keys) {
+            const sk = S.skin;
+            sk.keys = keys;
+            sk.pending = null;
+            sk.plan = null;
+            sk.msg = null;
+            const view = await loadModeFiles(keys);
+            sk.rec = view.rec;
+            sk.list = view.list;
+            sk.colOf = view.colOf;
+            // Images that other key modes use too: converting them changes those modes as well
+            sk.otherOf = new Map(sk.list.map(e => [e, modesUsing(e, [keys])]));
+            // Sets follow the skin's key count; Make targets the skin's values
+            Object.values(S.data).forEach(d => { if (d.setDirs.length !== keys) d.setDirs = defaultDirs(keys); });
+            Object.assign(S.data.make, { cw: sk.rec.widths[0], hp: sk.rec.hp });
+            // Restore and Convert start on the first receptor of the key mode
+            if (sk.list.length) ['restore', 'convert'].forEach(m => useSkinFile(m, sk.list[0]));
+            updateFileStatus();
+            syncInputs();
+            update();
+        }
+
+        // Makes a receptor from the skin the image a tool works on, with skin.ini's values for its column,
+        // and the key mode's other receptors joined into the estimate.
+        function useSkinFile(mode, e) {
+            const sk = S.skin;
+            const d = S.data[mode];
+            Object.assign(d, {
+                src: e.canvas, name: e.name, ab: e.ab, scale: 'auto', crop: 'strict', preview: null, names: {}, fromSkin: e.rel,
+                cw: sk.rec.widths[sk.colOf.get(e)], hp: sk.rec.hp,
+                setImgs: sk.list.filter(x => x !== e).map(x => ({ name: x.name, W: x.W, H: x.H, ab: x.ab }))
+            });
+            estimate(d);
+        }
+
+        function pickSkinFile(i) {
+            useSkinFile(S.mode, S.skin.list[i]);
+            updateFileStatus();
+            syncInputs();
+            update();
+        }
+
+        function closeSkin() {
+            S.skin = null;
+            update();
+        }
+
+        function toggleTarget(keys, on) {
+            const sk = S.skin;
+            if (on) sk.targets.add(keys);
+            else sk.targets.delete(keys);
+            sk.pending = null;
+            update();
+        }
+
+        // The values a key mode's images were made for: step 2's choice for the key mode on screen, the same
+        // rule ("Use") applied to each other key mode's own skin.ini values and set-wide estimate.
+        function modeValues(m, d) {
+            const sk = S.skin;
+            if (m.keys === sk.keys && d.fromSkin) return usedValues(d);
+            if (!m.list.length) return null;
+            const e = m.list[0];
+            const tmp = {
+                src: e.canvas, name: e.name, ab: e.ab, cw: m.rec.widths[m.colOf.get(e)], hp: m.rec.hp,
+                source: d.source || 'auto', scale: 'auto', guessPick: null,
+                setImgs: m.list.slice(1).map(x => ({ name: x.name, W: x.W, H: x.H, ab: x.ab }))
+            };
+            estimate(tmp);
+            return usedValues(tmp);
+        }
+
+        // Gathers what a save would change in each chosen key mode, for the confirmation and the save itself.
+        async function planSkin(kind) {
+            const sk = S.skin;
+            const modes = [];
+            for (const k of [...sk.targets].sort((a, b) => a - b)) {
+                modes.push(kind === 'convert' ? await loadModeFiles(k) : { keys: k, rec: skinReceptors(sk.ini, k), list: [] });
+            }
+            // A file used by several chosen key modes is converted once, with the first of them
+            const seen = new Set();
+            for (const m of modes) {
+                if (kind === 'convert') m.u = modeValues(m, S.data.convert);
+                m.jobs = m.list.filter(e => !seen.has(e) && seen.add(e));
+            }
+            const keys = modes.map(m => m.keys);
+            const sharedOut = [...new Set([...seen].flatMap(e => modesUsing(e, keys)))].sort((a, b) => a - b);
+            return { kind, modes, sharedOut };
+        }
+
+        async function askSkin(kind) {
+            const sk = S.skin;
+            if (!sk.targets.size) return;
+            sk.busy = true;
+            sk.msg = null;
+            update();
+            try {
+                sk.plan = await planSkin(kind);
+                sk.pending = kind;
+            } finally {
+                sk.busy = false;
+                update();
+            }
+        }
+
+        function cancelSkin() {
+            S.skin.pending = null;
+            S.skin.plan = null;
+            update();
+        }
+
+        // Screen width in osu!'s units (the screen is always 480 tall): 640 at 4:3, about 853 at 16:9.
+        const SCREEN_RATIOS = { '4:3': 4 / 3, '5:4': 5 / 4, '16:10': 16 / 10, '16:9': 16 / 9, '21:9': 21 / 9 };
+        function centeredStart(v, keys) {
+            const widths = iniNumbers(v.columnwidth, keys, INI_DEFAULTS.ColumnWidth);
+            const spacing = keys > 1 ? iniNumbers(v.columnspacing, keys - 1, 0) : [];
+            const total = [...widths, ...spacing].reduce((a, b) => a + b, 0);
+            return (480 * SCREEN_RATIOS[S.aspect] - total) / 2;
+        }
+
+        // Writes a key mode's values into skin.ini (null = leave as is), then ColumnStart if centering.
+        function setModeIni(ini, keys, cw, hp, center) {
+            let span = ini.maniaOrAdd(keys);
+            if (cw != null) span = ini.set(span, 'ColumnWidth', Array(keys).fill(fmt(cw)).join(','));
+            if (hp != null) span = ini.set(span, 'HitPosition', fmt(hp));
+            if (center) span = ini.set(span, 'ColumnStart', fmt(centeredStart(ini.values(span), keys)));
+            return span;
+        }
+
+        function backupStamp() {
+            const t = new Date();
+            const p = n => String(n).padStart(2, '0');
+            return `${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())} ${p(t.getHours())}-${p(t.getMinutes())}-${p(t.getSeconds())}`;
+        }
+
+        // Copies the files that exist to the backup folder. Returns the folder and how many were copied.
+        async function backupFiles(fs, rels) {
+            const dir = `${BACKUP_DIR}/${backupStamp()}`;
+            let n = 0;
+            for (const rel of rels) {
+                const bytes = await fs.read(rel);
+                if (!bytes) continue;
+                await fs.write(`${dir}/${rel}`, bytes);
+                n++;
+            }
+            return { dir, n };
+        }
+
+        // Runs a write into the skin with a busy flag, then rereads the skin so the page shows the result.
+        async function writeSkin(job) {
+            const sk = S.skin;
+            if (!sk || sk.busy) return;
+            sk.busy = true;
+            update();
+            try {
+                const text = await job(sk);
+                sk.ini = new SkinIni(await sk.fs.read('skin.ini'));
+                sk.cache = new Map(); // images were rewritten
+                sk.pending = null;
+                await loadSkinKeys(sk.keys);
+                sk.msg = { level: 'ok', text };
+                showToast('Saved into the skin.');
+            } catch (e) {
+                sk.msg = { level: 'err', text: `Could not write into the skin: ${e && e.message ? e.message : e}` };
+            } finally {
+                sk.busy = false;
+                update();
+            }
+        }
+
+        const modeNames = list => list.map(k => `${k}K`).join(', ');
+        const winPath = p => p.replace(/\//g, '\\');
+
+        // Convert: every receptor file of the chosen key modes, from the values each was made for (step 2's
+        // choice) to the new values, each at its own resolution and width.
+        function convertSkin() {
+            return writeSkin(async sk => {
+                const d = S.data.convert;
+                const plan = await planSkin('convert');
+                const rendered = [];
+                const notes = [];
+                const done = [];
+                for (const m of plan.modes) {
+                    if (!m.u) continue;
+                    for (const e of m.jobs) {
+                        const job = {
+                            ...d, src: e.canvas, name: e.name, ab: e.ab, setImgs: [], guess: null, source: 'ini',
+                            cw: m.u.from === 'ini' ? m.rec.widths[m.colOf.get(e)] : m.u.cw, hp: m.u.hp,
+                            scale: e.tier, crop: 'strict', width: 'image', rotMode: 'one', oneDir: 'same', srcDir: 'up',
+                            names: {}, pattern: '', preview: null
+                        };
+                        const r = compute(job, 'convert');
+                        if (r.main.cutBelow) notes.push(`${e.rel}: ${r.main.cutBelow} px below the screen bottom cut`);
+                        rendered.push({ rel: e.rel, canvas: renderOutput(r.main) });
+                    }
+                    done.push(`${m.keys}K from ${fmt(m.u.cw)} / ${fmt(m.u.hp)}`);
+                }
+                if (!rendered.length) throw new Error('no receptor files found in the chosen key modes');
+                const { dir } = await backupFiles(sk.fs, [...rendered.map(x => x.rel), 'skin.ini']);
+                for (const x of rendered) await sk.fs.write(x.rel, await canvasBytes(x.canvas));
+                const keys = plan.modes.filter(m => m.u).map(m => m.keys);
+                if (S.skinIni || S.skinCenter) {
+                    const ini = new SkinIni(await sk.fs.read('skin.ini'));
+                    for (const k of keys) setModeIni(ini, k, S.skinIni ? d.ncw : null, S.skinIni ? d.nhp : null, S.skinCenter);
+                    await sk.fs.write('skin.ini', ini.bytes());
+                }
+                return `Converted ${rendered.length} files (${done.join('; ')}) to ${fmt(d.ncw)} / ${fmt(d.nhp)}.` +
+                    (S.skinIni ? ` skin.ini now has these values for ${modeNames(keys)}.` : '') +
+                    (S.skinCenter ? ` Playfield centered for ${S.aspect}.` : '') +
+                    ` The old files and skin.ini are in "${winPath(dir)}".` + (notes.length ? ` Note: ${notes.join('; ')}.` : '');
+            });
+        }
+
+        // Make: writes the outputs (one image for every key, or an arrow set per key mode) next to skin.ini
+        // and points each chosen key mode's KeyImage (or KeyImageD) lines at them.
+        function makeSkin() {
+            return writeSkin(async sk => {
+                const d = S.data.make;
+                const plan = await planSkin('make');
+                const set = d.rotMode === 'set';
+                const files = new Map();
+                const ini = new SkinIni(await sk.fs.read('skin.ini'));
+                const key = S.skinPressed ? 'D' : '';
+                for (const m of plan.modes) {
+                    // A set gets one arrow per key: the chosen directions when the key counts match, else the defaults
+                    const dirs = !set ? d.setDirs : d.setDirs.length === m.keys ? d.setDirs : defaultDirs(m.keys);
+                    const r = compute({ ...d, setDirs: dirs }, 'make');
+                    r.outputs.forEach(o => { if (!files.has(o.name)) files.set(o.name, o); });
+                    let span = ini.maniaOrAdd(m.keys);
+                    for (let c = 0; c < m.keys; c++) {
+                        span = ini.set(span, `KeyImage${c}${key}`, r.outputs.find(o => o.col === (set ? c : 0)).stem);
+                    }
+                    setModeIni(ini, m.keys, S.skinIni ? d.cw : null, S.skinIni ? d.hp : null, S.skinCenter);
+                }
+                const { dir, n } = await backupFiles(sk.fs, [...files.keys(), 'skin.ini']);
+                for (const [rel, o] of files) await sk.fs.write(rel, await canvasBytes(renderOutput(o)));
+                await sk.fs.write('skin.ini', ini.bytes());
+                const keys = plan.modes.map(m => m.keys);
+                return `Saved ${files.size} files as the ${S.skinPressed ? 'pressed' : 'unpressed'} receptors of ${modeNames(keys)}` +
+                    (S.skinIni ? `, with ColumnWidth ${fmt(d.cw)} and HitPosition ${fmt(d.hp)}` : '') +
+                    (S.skinCenter ? `, centered for ${S.aspect}` : '') +
+                    `. ${n > 1 ? 'skin.ini and the files that were replaced are' : 'skin.ini is'} backed up in "${winPath(dir)}".`;
+            });
+        }
+
+        // Only centers the playfield of the chosen key modes (ColumnStart), with their current widths.
+        function centerSkin() {
+            return writeSkin(async sk => {
+                const { dir } = await backupFiles(sk.fs, ['skin.ini']);
+                const ini = new SkinIni(await sk.fs.read('skin.ini'));
+                const keys = [...sk.targets].sort((a, b) => a - b);
+                const starts = keys.map(k => `${k}K ${ini.values(setModeIni(ini, k, null, null, true)).columnstart}`);
+                await sk.fs.write('skin.ini', ini.bytes());
+                return `Centered for ${S.aspect}: ColumnStart ${starts.join(', ')}. skin.ini is backed up in "${winPath(dir)}".`;
+            });
+        }
+
+        function renderSkin(d, r) {
+            const sk = S.skin;
+            const body = $('skinBody');
+            $('skinName').textContent = sk ? sk.name : '';
+            $('skinKeysWrap').classList.toggle('hidden', !sk);
+            if (!sk) {
+                body.innerHTML = '<p class="hint">Works directly on an osu! skin: its receptors and skin.ini values are read for you, and results can be written back into it. Replaced files are kept in a backup folder.</p>';
+                return;
+            }
+            if (!sk.rec) {
+                body.innerHTML = '<p class="hint">Reading the skin…</p>';
+                return;
+            }
+            const counts = sk.ini.keyCounts();
+            const opts = KEY_COUNTS.map(n => `<option value="${n}">${n}K${counts.includes(n) ? '' : ' (not in skin.ini)'}</option>`).join('');
+            const sel = $('selSkinKeys');
+            if (sel.dataset.opts !== opts) {
+                sel.innerHTML = opts;
+                sel.dataset.opts = opts;
+            }
+            sel.value = sk.keys;
+            sel.disabled = sk.busy;
+
+            const canLoad = MODES[S.mode].skinInput;
+            const fileLink = e => {
+                const label = escapeHtml(e.name) + (sk.otherOf.get(e).length ? '*' : '');
+                if (!canLoad) return `<span class="mono">${label}</span>`;
+                const i = sk.list.indexOf(e);
+                return d.fromSkin === e.rel ? `<b class="mono">${label}</b>` : `<button class="link mono" onclick="pickSkinFile(${i})">${label}</button>`;
+            };
+            const cell = (c, side) => c.files[side].length
+                ? c.files[side].map(fileLink).join('<br>')
+                : `<span class="hint">${escapeHtml(c[side].split('/').pop())}.png missing</span>`;
+            const shared = [...new Set(sk.list.flatMap(e => sk.otherOf.get(e)))].sort((a, b) => a - b);
+            let html = `<p class="hint">${sk.rec.hasSection ? '' : `No [Mania] section for ${sk.keys}K, so osu!'s defaults are shown. `}` +
+                `skin.ini: ColumnWidth ${sk.rec.widths.map(w => fmt(w)).join(', ')} · HitPosition ${fmt(sk.rec.hp)}` +
+                (canLoad ? '. Click a file to work on it.' : '.') +
+                (shared.length ? ` * also used by ${shared.join('K, ')}K.` : '') + '</p>';
+            html += `<table class="data"><thead><tr><th>Key</th><th>Unpressed (KeyImage)</th><th>Pressed (KeyImageD)</th></tr></thead><tbody>` +
+                sk.rec.cols.map(c => `<tr><td>${c.col + 1}</td><td>${cell(c, 'up')}</td><td>${cell(c, 'down')}</td></tr>`).join('') +
+                '</tbody></table>';
+
+            // Which key modes a save changes
+            const targets = [...sk.targets].sort((a, b) => a - b);
+            const busy = sk.busy ? ' disabled' : '';
+            html += `<div class="sub" style="margin-top:6px">Save into key modes</div><div class="btn-row">` +
+                KEY_COUNTS.map(n => `<label class="choice" title="${counts.includes(n) ? '' : 'Not in skin.ini yet: a [Mania] section is added'}">` +
+                    `<input type="checkbox"${sk.targets.has(n) ? ' checked' : ''}${busy} onchange="toggleTarget(${n}, this.checked)"> ${n}K${counts.includes(n) ? '' : '<span class="hint">+</span>'}</label>`).join('') +
+                '</div>';
+
+            const newVals = S.mode === 'convert' ? [d.ncw, d.nhp] : S.mode === 'make' ? [d.cw, d.hp] : null;
+            if (newVals) {
+                html += `<label class="choice"><input type="checkbox" ${S.skinIni ? 'checked' : ''} onchange="S.skinIni = this.checked; update()">` +
+                    ` <span>Also set ColumnWidth ${fmt(newVals[0])} / HitPosition ${fmt(newVals[1])} in skin.ini</span></label>`;
+            }
+            // Centering: ColumnStart for the key mode on screen, with the widths it will have
+            const shownV = sk.rec.hasSection ? sk.ini.values(sk.ini.mania(sk.keys)) : {};
+            const previewV = newVals && S.skinIni ? { ...shownV, columnwidth: Array(sk.keys).fill(newVals[0]).join(',') } : shownV;
+            const ratioOpts = Object.keys(SCREEN_RATIOS).map(k => `<option${k === S.aspect ? ' selected' : ''}>${k}</option>`).join('');
+            html += `<label class="choice"><input type="checkbox" ${S.skinCenter ? 'checked' : ''} onchange="S.skinCenter = this.checked; update()">` +
+                ` <span>Center the playfield for a <select onchange="S.aspect = this.value; update()">${ratioOpts}</select> screen` +
+                ` <span class="hint">(ColumnStart ${fmt(centeredStart(previewV, sk.keys))} for ${sk.keys}K, now ${fmt(parseFloat(shownV.columnstart) || 136)})</span></span></label>`;
+
+            const backupNote = `The old files and skin.ini are copied to <span class="mono">${BACKUP_DIR}\\&lt;date time&gt;</span> in the skin first.`;
+            const confirm = (text, fn, label) => `<div class="msg warn">${text} ${backupNote}<br>` +
+                `<button class="btn"${busy} onclick="${fn}()">${sk.busy ? 'Saving…' : label}</button> <button class="link" onclick="cancelSkin()">Cancel</button></div>`;
+            const plan = sk.plan;
+            const sharedNote = plan && plan.sharedOut.length ? ` Some images are also used by ${modeNames(plan.sharedOut)}, which is not ticked, and will change there too.` : '';
+            const centerNote = S.skinCenter ? ` The playfield is centered for ${S.aspect}.` : '';
+            if (!targets.length) {
+                html += '<p class="hint">Tick at least one key mode.</p>';
+            } else if (sk.pending === 'convert' && plan) {
+                const lines = plan.modes.map(m => !m.u ? `${m.keys}K: no receptor files found, skipped`
+                    : !m.jobs.length ? `${m.keys}K: uses the same ${m.list.length} files as above`
+                    : `${m.keys}K: ${m.jobs.length} files from ${fmt(m.u.cw)} / ${fmt(m.u.hp)} (${m.u.from === 'ini' ? 'skin.ini' : 'estimate'})` +
+                      (m.jobs.length < m.list.length ? `, ${m.list.length - m.jobs.length} more shared with a key mode above` : ''));
+                html += confirm(`Convert to ${fmt(d.ncw)} / ${fmt(d.nhp)}${d.offset ? `, offset ${d.offset > 0 ? '+' : ''}${fmt(d.offset)} px` : ''}?<br>` +
+                    lines.map(escapeHtml).join('<br>') + '<br>' + sharedNote + centerNote, 'convertSkin', 'Convert');
+            } else if (sk.pending === 'make' && plan && r) {
+                const set = d.rotMode === 'set';
+                const mismatch = set ? targets.filter(k => k !== d.setDirs.length) : [];
+                html += confirm(`Save ${set ? 'the arrow set' : 'this image'} as the ${S.skinPressed ? 'pressed' : 'unpressed'} receptors of ${modeNames(targets)}?` +
+                    (mismatch.length ? ` ${modeNames(mismatch)} ${mismatch.length > 1 ? 'have' : 'has'} a different key count than the set, so ${mismatch.length > 1 ? 'they get' : 'it gets'} the default directions.` : '') +
+                    centerNote, 'makeSkin', 'Save');
+            } else if (S.mode === 'convert') {
+                html += `<button class="btn"${busy} onclick="askSkin('convert')">${sk.busy ? 'Reading…' : `Convert the receptors of ${modeNames(targets)}…`}</button>`;
+            } else if (S.mode === 'make') {
+                html += r ? `<div class="btn-row"><label class="choice"><input type="radio" name="skinSide" ${S.skinPressed ? '' : 'checked'} onchange="S.skinPressed = false; update()"> Unpressed (KeyImage)</label>` +
+                    `<label class="choice"><input type="radio" name="skinSide" ${S.skinPressed ? 'checked' : ''} onchange="S.skinPressed = true; update()"> Pressed (KeyImageD)</label></div>` +
+                    `<button class="btn"${busy} onclick="askSkin('make')">Save into ${modeNames(targets)}…</button>`
+                    : '<p class="hint">Load a square receptor image to save it into the skin.</p>';
+            }
+            if (S.skinCenter && targets.length && !sk.pending) {
+                html += ` <button class="btn"${busy} onclick="centerSkin()" title="Writes only ColumnStart (skin.ini is backed up first)">Center ${modeNames(targets)} only</button>`;
+            }
+            if (sk.msg) html += `<div class="msg ${sk.msg.level}" style="margin-top:6px">${escapeHtml(sk.msg.text)}</div>`;
+            html += `<p><button class="link" onclick="closeSkin()">Close skin</button></p>`;
+            body.innerHTML = html;
+        }
+
+        // =====================================================================
+        // Wiring
+        // =====================================================================
+
+        function bindNumber(id, key) {
+            const el = $(id);
+            const read = () => {
+                let v = parseFloat(el.value);
+                if (!Number.isFinite(v)) return null;
+                return Math.min(parseFloat(el.max), Math.max(parseFloat(el.min), v));
+            };
+            el.addEventListener('input', () => {
+                const v = read();
+                if (v === null) return;
+                cur()[key] = v;
+                if (key === 'ncw') cur().ncwTyped = true;
+                update();
+            });
+            // On blur, put an out-of-range or empty value back to what is being used
+            el.addEventListener('change', () => { el.value = cur()[key] ?? ''; });
+        }
+
+        function setupDropAndPaste() {
+            const zone = $('dropzone');
+            let depth = 0;
+            const hasFiles = e => e.dataTransfer && Array.from(e.dataTransfer.types).includes('Files');
+            document.addEventListener('dragenter', e => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                depth++;
+                zone.classList.add('active');
+            });
+            document.addEventListener('dragover', e => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+            document.addEventListener('dragleave', () => {
+                depth = Math.max(0, depth - 1);
+                if (depth === 0) zone.classList.remove('active');
+            });
+            document.addEventListener('drop', e => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                depth = 0;
+                zone.classList.remove('active');
+                const files = Array.from(e.dataTransfer.files);
+                loadFile(files[0], files.slice(1));
+            });
+            document.addEventListener('paste', e => {
+                const items = e.clipboardData ? Array.from(e.clipboardData.items) : [];
+                const item = items.find(it => it.kind === 'file' && /^image\//.test(it.type));
+                if (!item) return;
+                e.preventDefault();
+                loadFile(item.getAsFile());
+            });
+        }
+
+        bindNumber('inCW', 'cw');
+        bindNumber('inHP', 'hp');
+        bindNumber('inNCW', 'ncw');
+        bindNumber('inNHP', 'nhp');
+        bindNumber('inOff', 'offset');
+        ['scale', 'crop', 'width'].forEach(name => {
+            document.querySelectorAll(`input[name="${name}"]`).forEach(el => el.addEventListener('change', () => setOption(name, el.value)));
+        });
+        $('selResize').addEventListener('change', e => { S.resize = e.target.value; update(); });
+        $('selSharpen').addEventListener('change', e => { S.sharpen = parseFloat(e.target.value); update(); });
+        $('selPreview').addEventListener('change', e => { cur().preview = e.target.value; update(); });
+        $('selSrcDir').addEventListener('change', e => setOption('srcDir', e.target.value));
+        $('chkFit').addEventListener('change', e => setOption('fitOutline', e.target.checked));
+        $('chkKeep').addEventListener('change', e => setOption('keepOverflow', e.target.checked));
+        $('selSource').addEventListener('change', e => setOption('source', e.target.value));
+        $('inPattern').addEventListener('input', e => { cur().pattern = e.target.value; update(); });
+        $('outRows').addEventListener('input', e => {
+            if (!e.target.classList.contains('fname')) return;
+            const col = e.target.dataset.col;
+            const d = cur();
+            if (e.target.value.trim()) d.names[col] = e.target.value;
+            else delete d.names[col];
+            document.querySelectorAll(`#outRows input.fname[data-col="${col}"]`).forEach(x => { if (x !== e.target) x.value = e.target.value; });
+        });
+        // On leaving a name box, show the cleaned-up final names without rebuilding the rows,
+        // so clicking a Save button right after typing still works
+        $('outRows').addEventListener('change', e => {
+            if (!e.target.classList.contains('fname')) return;
+            const r = compute();
+            if (!r) return;
+            document.querySelectorAll('#outRows input.fname').forEach(x => {
+                const o = r.outputs.find(out => out.col === +x.dataset.col);
+                if (o) x.value = o.stem;
+            });
+        });
+        $('selOneDir').addEventListener('change', e => { cur().rotMode = 'one'; setOption('oneDir', e.target.value); });
+        function useSetMode() {
+            const d = cur();
+            d.rotMode = 'set';
+            if (d.width === 'image') {
+                d.width = 'note';
+                showToast('Output width set to note size, so every arrow direction comes out identical.');
+            }
+        }
+        document.querySelectorAll('input[name="rotMode"]').forEach(el => el.addEventListener('change', () => {
+            if (el.value === 'set') {
+                useSetMode();
+                syncInputs();
+                update();
+            } else {
+                setOption('rotMode', el.value);
+            }
+        }));
+        $('setDirs').addEventListener('change', e => {
+            if (!e.target.classList.contains('setDir')) return;
+            const d = cur();
+            d.setDirs = d.setDirs.slice();
+            d.setDirs[+e.target.dataset.i] = e.target.value;
+            if (d.rotMode !== 'set') useSetMode();
+            syncInputs();
+            update();
+        });
+        $('selSetKeys').innerHTML = KEY_COUNTS.map(n => `<option value="${n}">${n}</option>`).join('');
+        $('selSetKeys').addEventListener('change', e => {
+            const d = cur();
+            d.setDirs = defaultDirs(+e.target.value);
+            if (d.rotMode !== 'set') useSetMode();
+            syncInputs();
+            update();
+        });
+        // Picking a key mode also makes it the one saved into (more can be ticked after)
+        $('selSkinKeys').addEventListener('change', e => {
+            const keys = +e.target.value;
+            S.skin.targets = new Set([keys]);
+            try { localStorage.setItem('skinKeys', keys); } catch { /* storage unavailable */ }
+            loadSkinKeys(keys);
+        });
+        setupDropAndPaste();
+
+        // Redraw previews whenever their boxes change size
+        let redrawQueued = false;
+        const ro = new ResizeObserver(() => {
+            if (redrawQueued) return;
+            redrawQueued = true;
+            requestAnimationFrame(() => {
+                redrawQueued = false;
+                const r = compute();
+                drawPreviews(r);
+                drawGame(r);
+            });
+        });
+        ro.observe($('cvBefore').parentElement);
+        ro.observe($('cvAfter').parentElement);
+        ro.observe($('cvGame').parentElement);
+
+        setMode('restore');
+
+        // Installable / offline when served over http(s); file:// keeps working without it
+        if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>
