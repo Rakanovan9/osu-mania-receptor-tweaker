@@ -20,6 +20,7 @@ Fix osu!mania receptor images for any `ColumnWidth` and `HitPosition`.
 - **Convert:** move a receptor to new values, for example `HitPosition` 467 → 432.
 - **Skin folder:** open a skin and convert all its receptors at once, for any key mode (1K–10K).
 - **Centering:** center the playfield for your screen ratio.
+- **Lane cover:** a `mania-stage-bottom` cover from the top or bottom, only as wide as the columns.
 - **Auto-detect:** finds the values a receptor was made for.
 - **1x and @2x:** both saved, with an in-game preview.
 

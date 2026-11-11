@@ -267,6 +267,45 @@
                 </div>
             </fieldset>
 
+            <fieldset id="coverGroup">
+                <legend>Lane cover <span class="hint">(mania-stage-bottom)</span></legend>
+                <label class="choice"><input type="checkbox" id="chkCover">
+                    <span>Cover the lanes <span class="hint">(only as wide as the columns)</span></span></label>
+                <div id="coverOpts">
+                    <div class="field">
+                        <label for="inCoverFrom">From</label>
+                        <input type="number" id="inCoverFrom" min="0" max="480" step="any">
+                        <span class="unit">0 = top</span>
+                    </div>
+                    <div class="field">
+                        <label for="inCoverTo">To</label>
+                        <input type="number" id="inCoverTo" min="0" max="480" step="any">
+                        <span class="unit">480 = bottom</span>
+                    </div>
+                    <div class="field">
+                        <label for="inCoverFade">Soft edge</label>
+                        <input type="number" id="inCoverFade" min="0" max="100" step="1">
+                        <span class="unit">% of cover</span>
+                    </div>
+                    <div class="field">
+                        <label for="inCoverAlpha">Opacity</label>
+                        <input type="number" id="inCoverAlpha" min="1" max="100" step="1">
+                        <span class="unit">%</span>
+                    </div>
+                    <div class="field">
+                        <label for="inCoverColor">Color</label>
+                        <input type="color" id="inCoverColor">
+                        <span></span>
+                    </div>
+                    <div class="hint" id="coverInfo"></div>
+                    <div class="btn-row" style="margin-top:4px">
+                        <button class="btn" onclick="saveCover('1x')">Save 1x</button>
+                        <button class="btn" onclick="saveCover('2x')">Save @2x</button>
+                    </div>
+                    <div id="coverSkin"></div>
+                </div>
+            </fieldset>
+
             <details class="adv" id="advanced">
                 <summary>Advanced options</summary>
 
@@ -329,7 +368,8 @@
                 <p class="hint">Drawn the way osu! shows a receptor: width stretched to ColumnWidth, height kept, bottom on the screen edge.
                     <span class="swatch" style="background:#fbbf24"></span>a note at HitPosition (the receptor should line up with it)
                     <span class="swatch" style="background:#38bdf8"></span>HitPosition line
-                    <span class="swatch" style="background:#f43f5e"></span>screen bottom</p>
+                    <span class="swatch" style="background:#f43f5e"></span>screen bottom
+                    <span id="coverLegend"><span class="swatch" style="background:#000; outline:1px dashed #aaa"></span>lane cover</span></p>
             </fieldset>
 
             <fieldset>
@@ -410,6 +450,9 @@
             skinPressed: false, // Make: save as the pressed (KeyImageD) instead of unpressed receptors
             skinCenter: false, // also center the playfield (ColumnStart) when saving into the skin
             aspect: '16:9',    // screen ratio the playfield is centered for
+            // Lane cover: mania-stage-bottom.png, as wide as the columns. start/end: where it covers, on
+            // HitPosition's scale (0 = top of the screen, 480 = bottom). fade/alpha in %.
+            cover: { on: false, start: 0, end: 144, fade: 10, alpha: 100, color: '#000000' },
             data: {
                 // cw/hp: the user's skin.ini values (null until typed). source picks between them and the
                 // estimate; setImgs are other receptor images of the same skin, estimated together.
@@ -1301,7 +1344,9 @@
             });
 
             // Show the bottom part of the screen that holds the receptors and a note above them
-            const topUnits = Math.max(0, Math.min(...groups.map(gr => Math.min(gr.hp - gr.cw * 1.6, 480 - gr.hUnits))) - 8);
+            // (and the lane cover: from the top, the whole screen is shown)
+            const [cover0, cover1] = S.cover.on ? coverSpan() : [480, 480];
+            const topUnits = Math.max(0, Math.min(cover0, ...groups.map(gr => Math.min(gr.hp - gr.cw * 1.6, 480 - gr.hUnits))) - 8);
             const span = 480 - topUnits;
             const gapPx = 40;
             const totalCols = groups.reduce((sum, gr) => sum + gr.cw * GAME_KEYS, 0);
@@ -1342,6 +1387,17 @@
                 ctx.strokeStyle = '#fbbf24';
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(noteX, Y(gr.hp) - colW, colW, colW);
+                // Lane cover, on the new values only; osu! draws it above the notes and receptors
+                if (S.cover.on && gr === groups[groups.length - 1]) {
+                    paintCover(ctx, x, Y(cover0), w, Y(cover1) - Y(cover0));
+                    // Its outline, so a dark cover still shows on the dark playfield
+                    ctx.save();
+                    ctx.setLineDash([4, 3]);
+                    ctx.strokeStyle = '#aaa';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x + 0.5, Y(cover0) + 0.5, w - 1, Y(cover1) - Y(cover0) - 1);
+                    ctx.restore();
+                }
                 // HitPosition line
                 ctx.strokeStyle = '#38bdf8';
                 ctx.lineWidth = 1.5;
@@ -1498,6 +1554,7 @@
             $('btnZip').disabled = !r;
 
             renderSkin(d, r);
+            renderCover();
             drawPreviews(r);
             drawGame(r);
         }
@@ -1697,19 +1754,142 @@
         async function saveAll() {
             const r = compute();
             if (!r) return;
-            const blobs = await Promise.all(r.outputs.map(o => canvasToBlob(renderOutput(o))));
+            const files = r.outputs.map(o => ({ name: o.name, canvas: renderOutput(o) }));
+            if (S.cover.on) {
+                const total = coverStage().total;
+                ['1x', '2x'].forEach(t => files.push({ name: coverFileName(COVER_NAME, t), canvas: coverCanvas(total, t) }));
+            }
+            const blobs = await Promise.all(files.map(f => canvasToBlob(f.canvas)));
             if (window.JSZip) {
                 const zip = new JSZip();
-                r.outputs.forEach((o, i) => zip.file(o.name, blobs[i]));
+                files.forEach((f, i) => zip.file(f.name, blobs[i]));
                 const name = r.zipName;
                 if (await downloadBlob(await zip.generateAsync({ type: 'blob' }), name)) showToast(`Saved ${name}`);
             } else {
                 // ZIP library failed to load: save the files one by one
-                for (let i = 0; i < r.outputs.length; i++) {
-                    if (!(await downloadBlob(blobs[i], r.outputs[i].name))) return;
+                for (let i = 0; i < files.length; i++) {
+                    if (!(await downloadBlob(blobs[i], files[i].name))) return;
                 }
                 showToast('Saved the files separately.');
             }
+        }
+
+        // =====================================================================
+        // Lane cover: mania-stage-bottom.png. osu! draws it above the notes, centered on the playfield
+        // with its bottom on the screen bottom, not stretched, at 1 px per unit (2 at @2x: 0.625x the
+        // 1.6 of other mania elements; measured in osu!stable at 1080p). Making it exactly as wide as
+        // the columns covers only the lanes. The cover's From / To are on HitPosition's scale, so the
+        // image reaches from From down to the screen bottom and is transparent below To.
+        // =====================================================================
+
+        const COVER_NAME = 'mania-stage-bottom';
+        const coverScale = tier => tier === '2x' ? 2 : 1; // px per osu! unit
+        // [top, bottom] of the cover in osu! units, at least 1 unit tall
+        function coverSpan() {
+            const a = Math.min(S.cover.start, S.cover.end);
+            const b = Math.max(S.cover.start, S.cover.end);
+            return b - a >= 1 ? [a, b] : a >= 479 ? [479, 480] : [a, a + 1];
+        }
+        const coverImageUnits = () => 480 - coverSpan()[0];
+
+        function hexRgb(hex) {
+            const n = parseInt(String(hex).replace('#', ''), 16) || 0;
+            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        }
+
+        // The playfield the cover is made for, from the tool's values (and the skin's, when one is open)
+        function coverStage(d = cur(), mode = S.mode) {
+            const newCW = mode === 'convert' ? d.ncw : mode === 'make' ? d.cw : null;
+            const sk = S.skin;
+            if (sk && sk.rec) {
+                let v = sk.rec.hasSection ? sk.ini.values(sk.ini.mania(sk.keys)) : {};
+                if (newCW != null && S.skinIni) v = { ...v, columnwidth: Array(sk.keys).fill(newCW).join(',') };
+                return { keys: sk.keys, total: stageWidth(v, sk.keys) };
+            }
+            const keys = d.rotMode === 'set' ? d.setDirs.length : 4;
+            return { keys, total: (newCW || FALLBACK.cw) * keys };
+        }
+
+        function coverCanvas(total, tier) {
+            const M = coverScale(tier);
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(total * M));
+            const [a, b] = coverSpan();
+            c.height = Math.max(1, Math.round((480 - a) * M));
+            paintCover(c.getContext('2d'), 0, 0, c.width, Math.min(c.height, Math.round((b - a) * M)));
+            return c;
+        }
+
+        // Fills a rectangle with the cover: solid color, fading out on each edge that is inside the
+        // screen (an edge on the top or bottom of the screen stays sharp)
+        function paintCover(ctx, x, y, w, h) {
+            const [r, g, b] = hexRgb(S.cover.color);
+            const solid = `rgba(${r}, ${g}, ${b}, ${S.cover.alpha / 100})`;
+            const clear = `rgba(${r}, ${g}, ${b}, 0)`;
+            const [a, z] = coverSpan();
+            const fadeTop = a > 0, fadeBottom = z < 480;
+            const fade = Math.min(h * S.cover.fade / 100, h / (fadeTop && fadeBottom ? 2 : 1));
+            const band = (fy, from, to) => {
+                const grad = ctx.createLinearGradient(0, fy, 0, fy + fade);
+                grad.addColorStop(0, from);
+                grad.addColorStop(1, to);
+                ctx.fillStyle = grad;
+                ctx.fillRect(x, fy, w, fade);
+            };
+            let top = y, bottom = y + h;
+            if (fade > 0 && fadeTop) { band(y, clear, solid); top += fade; }
+            if (fade > 0 && fadeBottom) { band(y + h - fade, solid, clear); bottom -= fade; }
+            ctx.fillStyle = solid;
+            ctx.fillRect(x, top, w, bottom - top);
+        }
+
+        const coverFileName = (stem, tier) => `${stem}${tier === '2x' ? '@2x' : ''}.png`;
+
+        async function saveCover(tier) {
+            const name = coverFileName(COVER_NAME, tier);
+            if (await downloadBlob(await canvasToBlob(coverCanvas(coverStage().total, tier)), name)) showToast(`Saved ${name}`);
+        }
+
+        // In a skin: one cover per key mode (the widths differ), pointed at by that mode's StageBottom line
+        const coverStem = keys => `${COVER_NAME}-${keys}k`;
+        const coverRels = keys => keys.flatMap(k => ['1x', '2x'].map(t => coverFileName(coverStem(k), t)));
+        function coverFor(ini, keys) {
+            const span = ini.maniaOrAdd(keys);
+            const total = stageWidth(ini.values(span), keys);
+            ini.set(span, 'StageBottom', coverStem(keys));
+            return ['1x', '2x'].map(t => ({ rel: coverFileName(coverStem(keys), t), canvas: coverCanvas(total, t) }));
+        }
+
+        // Saves only the lane cover into the ticked key modes
+        function coverSkin() {
+            return writeSkin(async sk => {
+                const keys = [...sk.targets].sort((a, b) => a - b);
+                const { dir } = await backupFiles(sk.fs, [...coverRels(keys), 'skin.ini']);
+                const ini = new SkinIni(await sk.fs.read('skin.ini'));
+                for (const k of keys) for (const f of coverFor(ini, k)) await sk.fs.write(f.rel, await canvasBytes(f.canvas));
+                await sk.fs.write('skin.ini', ini.bytes());
+                return `Lane cover saved for ${modeNames(keys)} (${keys.map(k => coverStem(k) + '.png').join(', ')}). skin.ini is backed up in "${winPath(dir)}".`;
+            });
+        }
+
+        function renderCover() {
+            const show = S.mode !== 'restore';
+            $('coverGroup').classList.toggle('hidden', !show);
+            $('coverOpts').classList.toggle('hidden', !S.cover.on);
+            $('coverLegend').classList.toggle('hidden', !S.cover.on);
+            if (!show || !S.cover.on) return;
+            const st = coverStage();
+            const px = t => { const M = coverScale(t); return `${Math.round(st.total * M)}×${Math.round(coverImageUnits() * M)}`; };
+            const d = cur();
+            const hp = S.mode === 'convert' ? d.nhp : d.hp;
+            $('coverInfo').textContent = `Same scale as HitPosition (yours: ${fmt(hp)}). ${st.keys}K, ${fmt(st.total)} wide: ${px('1x')} px, @2x ${px('2x')} px.`;
+            const sk = S.skin;
+            const targets = sk ? [...sk.targets].sort((a, b) => a - b) : [];
+            $('coverSkin').innerHTML = sk && sk.rec && targets.length
+                ? `<p class="hint">Also saved into the skin with Convert / Make, as <span class="mono">${coverStem(targets[0])}.png</span> (StageBottom in skin.ini).</p>` +
+                  `<button class="btn"${sk.busy ? ' disabled' : ''} onclick="coverSkin()">Save cover into ${modeNames(targets)} only</button>` +
+                  ` <span class="hint">(fits skin.ini's current widths)</span>`
+                : '';
         }
 
         let toastTimer = null;
@@ -2111,11 +2291,14 @@
 
         // Screen width in osu!'s units (the screen is always 480 tall): 640 at 4:3, about 853 at 16:9.
         const SCREEN_RATIOS = { '4:3': 4 / 3, '5:4': 5 / 4, '16:10': 16 / 10, '16:9': 16 / 9, '21:9': 21 / 9 };
-        function centeredStart(v, keys) {
+        // Width of the columns plus the gaps between them, from a [Mania] section's values
+        function stageWidth(v, keys) {
             const widths = iniNumbers(v.columnwidth, keys, INI_DEFAULTS.ColumnWidth);
             const spacing = keys > 1 ? iniNumbers(v.columnspacing, keys - 1, 0) : [];
-            const total = [...widths, ...spacing].reduce((a, b) => a + b, 0);
-            return (480 * SCREEN_RATIOS[S.aspect] - total) / 2;
+            return [...widths, ...spacing].reduce((a, b) => a + b, 0);
+        }
+        function centeredStart(v, keys) {
+            return (480 * SCREEN_RATIOS[S.aspect] - stageWidth(v, keys)) / 2;
         }
 
         // Writes a key mode's values into skin.ini (null = leave as is), then ColumnStart if centering.
@@ -2196,17 +2379,22 @@
                     done.push(`${m.keys}K from ${fmt(m.u.cw)} / ${fmt(m.u.hp)}`);
                 }
                 if (!rendered.length) throw new Error('no receptor files found in the chosen key modes');
-                const { dir } = await backupFiles(sk.fs, [...rendered.map(x => x.rel), 'skin.ini']);
-                for (const x of rendered) await sk.fs.write(x.rel, await canvasBytes(x.canvas));
                 const keys = plan.modes.filter(m => m.u).map(m => m.keys);
-                if (S.skinIni || S.skinCenter) {
+                const covers = S.cover.on ? coverRels(keys) : [];
+                const { dir } = await backupFiles(sk.fs, [...rendered.map(x => x.rel), ...covers, 'skin.ini']);
+                for (const x of rendered) await sk.fs.write(x.rel, await canvasBytes(x.canvas));
+                if (S.skinIni || S.skinCenter || S.cover.on) {
                     const ini = new SkinIni(await sk.fs.read('skin.ini'));
-                    for (const k of keys) setModeIni(ini, k, S.skinIni ? d.ncw : null, S.skinIni ? d.nhp : null, S.skinCenter);
+                    for (const k of keys) {
+                        setModeIni(ini, k, S.skinIni ? d.ncw : null, S.skinIni ? d.nhp : null, S.skinCenter);
+                        if (S.cover.on) for (const f of coverFor(ini, k)) await sk.fs.write(f.rel, await canvasBytes(f.canvas));
+                    }
                     await sk.fs.write('skin.ini', ini.bytes());
                 }
                 return `Converted ${rendered.length} files (${done.join('; ')}) to ${fmt(d.ncw)} / ${fmt(d.nhp)}.` +
                     (S.skinIni ? ` skin.ini now has these values for ${modeNames(keys)}.` : '') +
                     (S.skinCenter ? ` Playfield centered for ${S.aspect}.` : '') +
+                    (S.cover.on ? ' Lane cover saved.' : '') +
                     ` The old files and skin.ini are in "${winPath(dir)}".` + (notes.length ? ` Note: ${notes.join('; ')}.` : '');
             });
         }
@@ -2221,6 +2409,7 @@
                 const files = new Map();
                 const ini = new SkinIni(await sk.fs.read('skin.ini'));
                 const key = S.skinPressed ? 'D' : '';
+                const covers = [];
                 for (const m of plan.modes) {
                     // A set gets one arrow per key: the chosen directions when the key counts match, else the defaults
                     const dirs = !set ? d.setDirs : d.setDirs.length === m.keys ? d.setDirs : defaultDirs(m.keys);
@@ -2231,14 +2420,17 @@
                         span = ini.set(span, `KeyImage${c}${key}`, r.outputs.find(o => o.col === (set ? c : 0)).stem);
                     }
                     setModeIni(ini, m.keys, S.skinIni ? d.cw : null, S.skinIni ? d.hp : null, S.skinCenter);
+                    if (S.cover.on) covers.push(...coverFor(ini, m.keys));
                 }
-                const { dir, n } = await backupFiles(sk.fs, [...files.keys(), 'skin.ini']);
+                const { dir, n } = await backupFiles(sk.fs, [...files.keys(), ...covers.map(f => f.rel), 'skin.ini']);
                 for (const [rel, o] of files) await sk.fs.write(rel, await canvasBytes(renderOutput(o)));
+                for (const f of covers) await sk.fs.write(f.rel, await canvasBytes(f.canvas));
                 await sk.fs.write('skin.ini', ini.bytes());
                 const keys = plan.modes.map(m => m.keys);
                 return `Saved ${files.size} files as the ${S.skinPressed ? 'pressed' : 'unpressed'} receptors of ${modeNames(keys)}` +
                     (S.skinIni ? `, with ColumnWidth ${fmt(d.cw)} and HitPosition ${fmt(d.hp)}` : '') +
                     (S.skinCenter ? `, centered for ${S.aspect}` : '') +
+                    (S.cover.on ? ', with a lane cover' : '') +
                     `. ${n > 1 ? 'skin.ini and the files that were replaced are' : 'skin.ini is'} backed up in "${winPath(dir)}".`;
             });
         }
@@ -2323,7 +2515,8 @@
                 `<button class="btn"${busy} onclick="${fn}()">${sk.busy ? 'Saving…' : label}</button> <button class="link" onclick="cancelSkin()">Cancel</button></div>`;
             const plan = sk.plan;
             const sharedNote = plan && plan.sharedOut.length ? ` Some images are also used by ${modeNames(plan.sharedOut)}, which is not ticked, and will change there too.` : '';
-            const centerNote = S.skinCenter ? ` The playfield is centered for ${S.aspect}.` : '';
+            const centerNote = (S.skinCenter ? ` The playfield is centered for ${S.aspect}.` : '') +
+                (S.cover.on ? ' A lane cover is saved too (StageBottom).' : '');
             if (!targets.length) {
                 html += '<p class="hint">Tick at least one key mode.</p>';
             } else if (sk.pending === 'convert' && plan) {
@@ -2490,6 +2683,21 @@
             try { localStorage.setItem('skinKeys', keys); } catch { /* storage unavailable */ }
             loadSkinKeys(keys);
         });
+        // Lane cover options (shared by Make and Convert)
+        $('chkCover').addEventListener('change', e => { S.cover.on = e.target.checked; update(); });
+        [['inCoverFrom', 'start'], ['inCoverTo', 'end'], ['inCoverFade', 'fade'], ['inCoverAlpha', 'alpha']].forEach(([id, key]) => {
+            const el = $(id);
+            el.value = S.cover[key];
+            el.addEventListener('input', () => {
+                const v = parseFloat(el.value);
+                if (!Number.isFinite(v)) return;
+                S.cover[key] = Math.min(+el.max, Math.max(+el.min, v));
+                update();
+            });
+            el.addEventListener('change', () => { el.value = S.cover[key]; });
+        });
+        $('inCoverColor').value = S.cover.color;
+        $('inCoverColor').addEventListener('input', e => { S.cover.color = e.target.value; update(); });
         setupDropAndPaste();
 
         // Redraw previews whenever their boxes change size

@@ -1,5 +1,5 @@
 // Offline cache for the installed app. Bump CACHE when shipping changes to force a refresh.
-const CACHE = 'receptor-fixer-v14';
+const CACHE = 'receptor-fixer-v18';
 const CORE = [
     './',
     './index.html',
